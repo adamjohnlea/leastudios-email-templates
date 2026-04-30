@@ -27,6 +27,46 @@ define( 'LEASTUDIOS_EMAIL_TEMPLATES_FILE', __FILE__ );
 define( 'LEASTUDIOS_EMAIL_TEMPLATES_DIR', plugin_dir_path( __FILE__ ) );
 define( 'LEASTUDIOS_EMAIL_TEMPLATES_URL', plugin_dir_url( __FILE__ ) );
 
+/**
+ * Run on plugin activation.
+ *
+ * Registered above the vendor-autoload check so a botched install
+ * (composer not yet run) still gets a working activation hook for
+ * default-option seeding.
+ *
+ * @return void
+ */
+function leastudios_email_templates_activate(): void {
+	add_option(
+		'leastudios_email_templates_branding',
+		[
+			'enabled'       => true,
+			'logo_url'      => '',
+			'primary_color' => '#4f46e5',
+			'footer_text'   => '',
+			'social_links'  => [
+				'twitter'   => '',
+				'facebook'  => '',
+				'linkedin'  => '',
+				'instagram' => '',
+			],
+		]
+	);
+
+	add_option( 'leastudios_email_templates_emails', [] );
+}
+register_activation_hook( __FILE__, 'leastudios_email_templates_activate' );
+
+/**
+ * Run on plugin deactivation.
+ *
+ * @return void
+ */
+function leastudios_email_templates_deactivate(): void {
+	// Nothing to clean up on deactivation.
+}
+register_deactivation_hook( __FILE__, 'leastudios_email_templates_deactivate' );
+
 // Autoloader.
 if ( ! file_exists( __DIR__ . '/vendor/autoload.php' ) ) {
 	add_action(
@@ -71,39 +111,3 @@ function leastudios_email_templates_php_version_notice(): void {
 		esc_html__( 'leaStudios Email Templates requires PHP 8.1 or higher.', 'leastudios-email-templates' )
 	);
 }
-
-/**
- * Run on plugin activation.
- *
- * @return void
- */
-function leastudios_email_templates_activate(): void {
-	add_option(
-		'leastudios_email_templates_branding',
-		[
-			'enabled'       => true,
-			'logo_url'      => '',
-			'primary_color' => '#4f46e5',
-			'footer_text'   => '',
-			'social_links'  => [
-				'twitter'   => '',
-				'facebook'  => '',
-				'linkedin'  => '',
-				'instagram' => '',
-			],
-		]
-	);
-
-	add_option( 'leastudios_email_templates_emails', [] );
-}
-register_activation_hook( __FILE__, 'leastudios_email_templates_activate' );
-
-/**
- * Run on plugin deactivation.
- *
- * @return void
- */
-function leastudios_email_templates_deactivate(): void {
-	// Nothing to clean up on deactivation.
-}
-register_deactivation_hook( __FILE__, 'leastudios_email_templates_deactivate' );

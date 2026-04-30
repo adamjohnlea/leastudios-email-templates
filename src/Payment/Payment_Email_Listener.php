@@ -185,7 +185,10 @@ class Payment_Email_Listener {
 	 * @return void
 	 */
 	private function send_refund_email( int $order_id, int $refunded_amount ): void {
-		$lock_key = 'leastudios_email_templates_refund_sent_' . $order_id;
+		// Dedupe key includes the refunded amount so a partial-then-full
+		// refund flow sends two distinct emails (one per refund event)
+		// while a webhook redelivery for the same amount still dedupes.
+		$lock_key = sprintf( 'leastudios_email_templates_refund_sent_%d_%d', $order_id, $refunded_amount );
 
 		if ( get_transient( $lock_key ) ) {
 			return;
@@ -197,7 +200,10 @@ class Payment_Email_Listener {
 			return;
 		}
 
-		set_transient( $lock_key, true, 30 );
+		// 10-minute window: long enough for a webhook to be retried after
+		// a slow request, short enough that distinct refunds (in the same
+		// order ID + amount tuple) are unlikely to collide.
+		set_transient( $lock_key, true, 10 * MINUTE_IN_SECONDS );
 
 		$this->sender->send( Email_Type::REFUND_PROCESSED, $context['customer_email'], $context );
 	}

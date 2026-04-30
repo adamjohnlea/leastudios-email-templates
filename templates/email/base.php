@@ -62,7 +62,7 @@ defined( 'ABSPATH' ) || exit;
 					<tr>
 						<td style="background-color:#ffffff;border-radius:8px;padding:40px;font-size:16px;line-height:1.6;color:#1f2937;">
 							<?php
-							// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Content is already escaped by the sender.
+							// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $body_html is intentional HTML; merge-tag values were escaped by Merge_Tag_Replacer::replace_html before being substituted in.
 							echo $body_html;
 							?>
 						</td>

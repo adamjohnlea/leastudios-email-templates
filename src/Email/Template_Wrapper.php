@@ -85,22 +85,38 @@ class Template_Wrapper {
 			return $args;
 		}
 
-		// Detect HTML content type.
-		$is_html = false;
-		foreach ( $headers as $header ) {
-			if ( is_string( $header ) && stripos( $header, 'content-type:' ) !== false && stripos( $header, 'text/html' ) !== false ) {
-				$is_html = true;
-				break;
-			}
-		}
-
-		if ( ! $is_html ) {
+		if ( ! $this->is_html_email( $headers ) ) {
 			return $args;
 		}
 
 		$args['message'] = $this->wrap( $args['message'] );
 
 		return $args;
+	}
+
+	/**
+	 * Decide whether an email is HTML.
+	 *
+	 * Mirrors WordPress core's resolution order: an explicit `Content-Type`
+	 * header in $args wins, otherwise the `wp_mail_content_type` filter is
+	 * consulted. Many plugins (and themes) opt every outgoing email into
+	 * HTML by filtering `wp_mail_content_type` rather than by setting a
+	 * per-message header, so checking only the headers misses those.
+	 *
+	 * @param array<int, mixed> $headers Already-split headers array.
+	 * @return bool
+	 */
+	private function is_html_email( array $headers ): bool {
+		foreach ( $headers as $header ) {
+			if ( is_string( $header ) && stripos( $header, 'content-type:' ) !== false && stripos( $header, 'text/html' ) !== false ) {
+				return true;
+			}
+		}
+
+		/** This filter is documented in wp-includes/pluggable.php. */
+		$filtered = (string) apply_filters( 'wp_mail_content_type', 'text/plain' );
+
+		return 'text/html' === strtolower( trim( $filtered ) );
 	}
 
 	/**
@@ -122,8 +138,8 @@ class Template_Wrapper {
 		$social_links  = $branding['social_links'] ?? [];
 		$site_name     = get_option( 'blogname', '' );
 
-		// Process merge tags in footer text.
-		$footer_text = $this->replacer->replace( $footer_text );
+		// Process merge tags in footer text. Footer is HTML-rendered.
+		$footer_text = $this->replacer->replace_html( $footer_text );
 
 		$template_path = LEASTUDIOS_EMAIL_TEMPLATES_DIR . 'templates/email/base.php';
 

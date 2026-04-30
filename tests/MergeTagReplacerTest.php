@@ -25,7 +25,7 @@ class MergeTagReplacerTest extends TestCase {
 	}
 
 	public function test_replaces_simple_tags(): void {
-		$result = $this->replacer->replace(
+		$result = $this->replacer->replace_html(
 			'Hello {name}, welcome to {place}!',
 			[
 				'name'  => 'Alice',
@@ -39,13 +39,13 @@ class MergeTagReplacerTest extends TestCase {
 	public function test_global_tags_always_available(): void {
 		update_option( 'blogname', 'Test Blog' );
 
-		$result = $this->replacer->replace( 'Welcome to {site_name}' );
+		$result = $this->replacer->replace_html( 'Welcome to {site_name}' );
 
 		$this->assertStringContainsString( 'Test Blog', $result );
 	}
 
 	public function test_missing_tags_remain_in_content(): void {
-		$result = $this->replacer->replace( 'Hi {unknown_tag}!' );
+		$result = $this->replacer->replace_html( 'Hi {unknown_tag}!' );
 
 		$this->assertStringContainsString( '{unknown_tag}', $result );
 	}
@@ -53,7 +53,7 @@ class MergeTagReplacerTest extends TestCase {
 	public function test_context_overrides_global_tags(): void {
 		update_option( 'blogname', 'Original Name' );
 
-		$result = $this->replacer->replace(
+		$result = $this->replacer->replace_html(
 			'{site_name}',
 			[ 'site_name' => 'Custom Name' ]
 		);
@@ -87,8 +87,40 @@ class MergeTagReplacerTest extends TestCase {
 			}
 		);
 
-		$result = $this->replacer->replace( '{custom_tag}' );
+		$result = $this->replacer->replace_html( '{custom_tag}' );
 
 		$this->assertSame( 'custom_value', $result );
+	}
+
+	public function test_replace_html_escapes_html_in_values(): void {
+		$result = $this->replacer->replace_html(
+			'<p>Hi {name}!</p>',
+			[ 'name' => '<script>alert(1)</script>' ]
+		);
+
+		$this->assertStringNotContainsString( '<script>', $result );
+		$this->assertStringContainsString( '&lt;script&gt;', $result );
+	}
+
+	public function test_replace_html_preserves_template_html(): void {
+		$result = $this->replacer->replace_html(
+			'<strong>{label}</strong>',
+			[ 'label' => 'Plain' ]
+		);
+
+		// Template <strong> stays; only the value is escaped (and contains no HTML).
+		$this->assertSame( '<strong>Plain</strong>', $result );
+	}
+
+	public function test_replace_subject_strips_crlf_from_values(): void {
+		$result = $this->replacer->replace_subject(
+			'Order from {name}',
+			[ 'name' => "Mallory\r\nBcc: attacker@evil.example" ]
+		);
+
+		$this->assertStringNotContainsString( "\r", $result );
+		$this->assertStringNotContainsString( "\n", $result );
+		$this->assertStringContainsString( 'Mallory', $result );
+		$this->assertStringContainsString( 'attacker@evil.example', $result );
 	}
 }
