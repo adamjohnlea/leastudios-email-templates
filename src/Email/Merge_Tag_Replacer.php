@@ -34,14 +34,49 @@ class Merge_Tag_Replacer {
 	];
 
 	/**
-	 * Replace merge tags in content.
+	 * Replace merge tags in an HTML email body. Values are HTML-escaped before
+	 * substitution so user-controlled context (e.g. customer names) cannot
+	 * inject markup or scripts into the rendered email.
 	 *
-	 * @param string               $content The content with {tags}.
+	 * @param string               $content HTML template containing {tags}.
 	 * @param array<string, mixed> $context The tag values.
-	 * @return string Content with tags replaced.
+	 * @return string HTML with tags replaced by escaped values.
 	 */
-	public function replace( string $content, array $context = [] ): string {
-		// Add global tags.
+	public function replace_html( string $content, array $context = [] ): string {
+		return $this->substitute(
+			$content,
+			$context,
+			static fn( string $value ): string => esc_html( $value )
+		);
+	}
+
+	/**
+	 * Replace merge tags in a subject line or other single-line plain-text
+	 * field. Strips CR/LF from values to prevent email-header injection in
+	 * case the subject is later concatenated into raw headers.
+	 *
+	 * @param string               $content Plain-text template containing {tags}.
+	 * @param array<string, mixed> $context The tag values.
+	 * @return string Plain text with tags replaced and CR/LF stripped.
+	 */
+	public function replace_subject( string $content, array $context = [] ): string {
+		return $this->substitute(
+			$content,
+			$context,
+			static fn( string $value ): string => preg_replace( '/[\r\n\t]+/', ' ', $value ) ?? ''
+		);
+	}
+
+	/**
+	 * Internal substitution engine. Applies $sanitize to each value before
+	 * inserting into the template via str_replace.
+	 *
+	 * @param string                  $content  The template.
+	 * @param array<string, mixed>    $context  The tag values.
+	 * @param callable(string):string $sanitize Per-value sanitiser.
+	 * @return string
+	 */
+	private function substitute( string $content, array $context, callable $sanitize ): string {
 		$context = array_merge( $this->get_global_tags(), $context );
 
 		/**
@@ -56,10 +91,8 @@ class Merge_Tag_Replacer {
 		$replace = [];
 
 		foreach ( $context as $key => $value ) {
-			$tag = '{' . $key . '}';
-
-			$search[]  = $tag;
-			$replace[] = (string) $value;
+			$search[]  = '{' . $key . '}';
+			$replace[] = $sanitize( (string) $value );
 		}
 
 		return str_replace( $search, $replace, $content );

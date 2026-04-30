@@ -18,6 +18,21 @@ defined( 'ABSPATH' ) || exit;
 class Email_Sender {
 
 	/**
+	 * Per-request memoized copy of the email-types option array, or null
+	 * when not yet populated / freshly invalidated.
+	 *
+	 * @var array<string, array<string, mixed>>|null
+	 */
+	private ?array $type_settings_cache = null;
+
+	/**
+	 * Whether we've already registered the option-update invalidation hooks.
+	 *
+	 * @var bool
+	 */
+	private bool $cache_hooks_registered = false;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Merge_Tag_Replacer $replacer The merge tag replacer.
@@ -44,9 +59,9 @@ class Email_Sender {
 		$subject = '' !== $settings['subject'] ? $settings['subject'] : $type->default_subject();
 		$body    = '' !== $settings['body'] ? $settings['body'] : $type->default_body();
 
-		// Replace merge tags.
-		$subject = $this->replacer->replace( $subject, $context );
-		$body    = $this->replacer->replace( $body, $context );
+		// Replace merge tags. Subject strips CR/LF; body escapes for HTML.
+		$subject = $this->replacer->replace_subject( $subject, $context );
+		$body    = $this->replacer->replace_html( $body, $context );
 
 		// Allow recipient override.
 		if ( ! empty( $settings['recipient_override'] ) && is_email( $settings['recipient_override'] ) ) {
@@ -92,11 +107,31 @@ class Email_Sender {
 	/**
 	 * Get settings for a specific email type.
 	 *
+	 * Memoizes the option read for the lifetime of the request so a batch
+	 * of emails sent in one PHP process (e.g. bulk-refund webhooks) does not
+	 * re-query the options table once per send. WordPress's options cache
+	 * already keeps the value warm, but this skips a function-call layer
+	 * and the array_key resolution per call too. Hook
+	 * `update_option_leastudios_email_templates_emails` to bust mid-request
+	 * if a settings save lands during the same PHP process.
+	 *
 	 * @param Email_Type $type The email type.
 	 * @return array{enabled: bool, subject: string, body: string, recipient_override: string}
 	 */
 	private function get_type_settings( Email_Type $type ): array {
-		$all = get_option( 'leastudios_email_templates_emails', [] );
+		if ( ! $this->cache_hooks_registered ) {
+			$this->cache_hooks_registered = true;
+			$invalidate                   = function (): void {
+				$this->type_settings_cache = null;
+			};
+			add_action( 'update_option_leastudios_email_templates_emails', $invalidate );
+			add_action( 'add_option_leastudios_email_templates_emails', $invalidate );
+			add_action( 'delete_option_leastudios_email_templates_emails', $invalidate );
+		}
+
+		if ( null === $this->type_settings_cache ) {
+			$this->type_settings_cache = (array) get_option( 'leastudios_email_templates_emails', [] );
+		}
 
 		$defaults = [
 			'enabled'            => true,
@@ -105,7 +140,7 @@ class Email_Sender {
 			'recipient_override' => '',
 		];
 
-		$settings = $all[ $type->value ] ?? [];
+		$settings = $this->type_settings_cache[ $type->value ] ?? [];
 
 		return array_merge( $defaults, $settings );
 	}
