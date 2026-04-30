@@ -100,16 +100,19 @@ class Settings_Page {
 	/**
 	 * Sanitize branding options.
 	 *
-	 * @param array $input Raw input.
-	 * @return array Sanitized values.
+	 * @param array<string, mixed> $input Raw input.
+	 * @return array<string, mixed> Sanitized values.
 	 */
 	public function sanitize_branding( array $input ): array {
 		$sanitized = [];
 
-		$sanitized['enabled']       = ! empty( $input['enabled'] );
-		$sanitized['logo_url']      = esc_url_raw( $input['logo_url'] ?? '' );
+		$sanitized['enabled']  = ! empty( $input['enabled'] );
+		$sanitized['logo_url'] = esc_url_raw( $input['logo_url'] ?? '' );
+		// sanitize_hex_color returns string|null (null on invalid input). Fall
+		// back to the default when the value is null OR '', covering both the
+		// "invalid hex" and "empty string passed in" cases.
 		$color                      = sanitize_hex_color( $input['primary_color'] ?? '#4f46e5' );
-		$sanitized['primary_color'] = false !== $color && '' !== $color ? $color : '#4f46e5';
+		$sanitized['primary_color'] = ( null !== $color && '' !== $color ) ? $color : '#4f46e5';
 		$sanitized['footer_text']   = wp_kses_post( $input['footer_text'] ?? '' );
 
 		$sanitized['social_links'] = [];
@@ -124,8 +127,8 @@ class Settings_Page {
 	/**
 	 * Sanitize email type settings.
 	 *
-	 * @param array $input Raw input.
-	 * @return array Sanitized values.
+	 * @param array<string, mixed> $input Raw input keyed by Email_Type value.
+	 * @return array<string, array{enabled: bool, subject: string, body: string, recipient_override: string}> Sanitized values.
 	 */
 	public function sanitize_emails( array $input ): array {
 		$sanitized = [];

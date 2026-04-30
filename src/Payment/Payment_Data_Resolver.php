@@ -123,7 +123,7 @@ class Payment_Data_Resolver {
 	/**
 	 * Resolve context from a Stripe invoice.
 	 *
-	 * @param array $invoice The Stripe invoice data.
+	 * @param array<string, mixed> $invoice The Stripe invoice data.
 	 * @return array<string, string> Merge tag context.
 	 */
 	public function resolve_invoice_context( array $invoice ): array {
