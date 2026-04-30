@@ -40,7 +40,11 @@ class EmailSenderTest extends TestCase {
 		$result = $this->sender->send(
 			Email_Type::PAYMENT_RECEIPT,
 			'test@example.com',
-			[ 'customer_name' => 'Test', 'product_name' => 'Widget', 'amount' => '$10.00' ]
+			[
+				'customer_name' => 'Test',
+				'product_name'  => 'Widget',
+				'amount'        => '$10.00',
+			]
 		);
 
 		$this->assertFalse( $result );

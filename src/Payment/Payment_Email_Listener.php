@@ -48,11 +48,12 @@ class Payment_Email_Listener {
 	/**
 	 * Handle order creation — send payment receipt.
 	 *
-	 * @param int   $order_id     The local order ID.
-	 * @param array $session_data The Stripe session data.
+	 * @param int                  $order_id     The local order ID.
+	 * @param array<string, mixed> $session_data The Stripe session data. Required by the action signature; the resolver re-derives everything from `$order_id`.
 	 * @return void
 	 */
 	public function on_order_created( int $order_id, array $session_data ): void {
+		unset( $session_data ); // Required by the leastudios_payments_order_created action signature; not consulted.
 		$context = $this->resolver->resolve_order_context( $order_id );
 
 		if ( empty( $context['customer_email'] ) ) {
@@ -65,9 +66,9 @@ class Payment_Email_Listener {
 	/**
 	 * Handle subscription sync — send subscription created email for new subscriptions only.
 	 *
-	 * @param string $stripe_sub_id The Stripe subscription ID.
-	 * @param string $local_status  The mapped local status.
-	 * @param array  $subscription  The full Stripe subscription object.
+	 * @param string               $stripe_sub_id The Stripe subscription ID.
+	 * @param string               $local_status  The mapped local status.
+	 * @param array<string, mixed> $subscription  The full Stripe subscription object.
 	 * @return void
 	 */
 	public function on_subscription_synced( string $stripe_sub_id, string $local_status, array $subscription ): void {
@@ -111,8 +112,8 @@ class Payment_Email_Listener {
 	/**
 	 * Handle invoice paid — send renewal email (skip initial invoice).
 	 *
-	 * @param int   $subscription_id The local subscription ID.
-	 * @param array $invoice         The Stripe invoice data.
+	 * @param int                  $subscription_id The local subscription ID.
+	 * @param array<string, mixed> $invoice         The Stripe invoice data.
 	 * @return void
 	 */
 	public function on_invoice_paid( int $subscription_id, array $invoice ): void {
@@ -135,8 +136,8 @@ class Payment_Email_Listener {
 	/**
 	 * Handle payment failure.
 	 *
-	 * @param int   $subscription_id The local subscription ID.
-	 * @param array $invoice         The Stripe invoice data.
+	 * @param int                  $subscription_id The local subscription ID.
+	 * @param array<string, mixed> $invoice         The Stripe invoice data.
 	 * @return void
 	 */
 	public function on_payment_failed( int $subscription_id, array $invoice ): void {
@@ -153,12 +154,13 @@ class Payment_Email_Listener {
 	/**
 	 * Handle refund webhook — send refund email.
 	 *
-	 * @param int   $order_id        The local order ID.
-	 * @param int   $amount_refunded The total refunded amount.
-	 * @param array $charge          The Stripe charge data.
+	 * @param int                  $order_id        The local order ID.
+	 * @param int                  $amount_refunded The total refunded amount.
+	 * @param array<string, mixed> $charge          The Stripe charge data. Required by the action signature; not consulted here.
 	 * @return void
 	 */
 	public function on_refund_processed( int $order_id, int $amount_refunded, array $charge ): void {
+		unset( $charge ); // Required by the leastudios_payments_refund_processed action signature; not consulted.
 		$this->send_refund_email( $order_id, $amount_refunded );
 	}
 
@@ -167,10 +169,11 @@ class Payment_Email_Listener {
 	 *
 	 * @param int    $order_id   The local order ID.
 	 * @param int    $amount     The refund amount.
-	 * @param string $new_status The new payment status.
+	 * @param string $new_status The new payment status. Required by the action signature; not consulted here.
 	 * @return void
 	 */
 	public function on_refund_issued( int $order_id, int $amount, string $new_status ): void {
+		unset( $new_status ); // Required by the leastudios_payments_refund_issued action signature; not consulted.
 		$this->send_refund_email( $order_id, $amount );
 	}
 

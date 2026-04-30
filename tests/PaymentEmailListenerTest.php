@@ -53,11 +53,13 @@ class PaymentEmailListenerTest extends TestCase {
 	public function test_on_order_created_sends_receipt(): void {
 		$this->resolver->method( 'resolve_order_context' )
 			->with( 42 )
-			->willReturn( [
-				'customer_email' => 'buyer@example.com',
-				'customer_name'  => 'Test Buyer',
-				'amount'         => '$29.99',
-			] );
+			->willReturn(
+				[
+					'customer_email' => 'buyer@example.com',
+					'customer_name'  => 'Test Buyer',
+					'amount'         => '$29.99',
+				]
+			);
 
 		$this->sender->expects( $this->once() )
 			->method( 'send' )
@@ -118,7 +120,11 @@ class PaymentEmailListenerTest extends TestCase {
 
 		$this->listener->on_invoice_paid(
 			1,
-			[ 'billing_reason' => 'subscription_cycle', 'amount_paid' => 999, 'currency' => 'usd' ]
+			[
+				'billing_reason' => 'subscription_cycle',
+				'amount_paid'    => 999,
+				'currency'       => 'usd',
+			]
 		);
 	}
 
@@ -138,16 +144,21 @@ class PaymentEmailListenerTest extends TestCase {
 
 		$this->listener->on_payment_failed(
 			1,
-			[ 'amount_due' => 1999, 'currency' => 'usd' ]
+			[
+				'amount_due' => 1999,
+				'currency'   => 'usd',
+			]
 		);
 	}
 
 	public function test_refund_deduplication(): void {
 		$this->resolver->method( 'resolve_refund_context' )
-			->willReturn( [
-				'customer_email'  => 'refund@example.com',
-				'refunded_amount' => '$5.00',
-			] );
+			->willReturn(
+				[
+					'customer_email'  => 'refund@example.com',
+					'refunded_amount' => '$5.00',
+				]
+			);
 
 		// Should only send once despite two calls.
 		$this->sender->expects( $this->once() )

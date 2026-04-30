@@ -44,11 +44,12 @@ class Template_Wrapper {
 	/**
 	 * Wrap email content via the leastudios_mailer_pre_send filter.
 	 *
-	 * @param array|null $args         The processed email args.
-	 * @param array      $original_atts The original wp_mail arguments.
-	 * @return array|null The modified args.
+	 * @param array<string, mixed>|null $args          The processed email args.
+	 * @param array<string, mixed>      $original_atts The original wp_mail arguments. Required by the filter signature; not currently consulted.
+	 * @return array<string, mixed>|null The modified args.
 	 */
 	public function wrap_mailer_email( ?array $args, array $original_atts ): ?array {
+		unset( $original_atts ); // Required by the leastudios_mailer_pre_send filter signature; not consulted.
 		if ( null === $args ) {
 			return null;
 		}
@@ -71,8 +72,8 @@ class Template_Wrapper {
 	/**
 	 * Wrap email content via the wp_mail filter (fallback when mailer is inactive).
 	 *
-	 * @param array $args The wp_mail arguments.
-	 * @return array Modified arguments.
+	 * @param array<string, mixed> $args The wp_mail arguments.
+	 * @return array<string, mixed> Modified arguments.
 	 */
 	public function wrap_wp_mail( array $args ): array {
 		// Check for opt-out header.
@@ -184,7 +185,11 @@ class Template_Wrapper {
 	/**
 	 * Check for opt-out header.
 	 *
-	 * @param array|string $headers The email headers.
+	 * The array form is loosely-typed because the entry point is the wp_mail
+	 * filter — third-party plugins can put arbitrary values in $args['headers'].
+	 * The runtime is_string() check below is defensive against that.
+	 *
+	 * @param array<int, mixed>|string $headers The email headers (CRLF-joined string or list of header lines).
 	 * @return bool
 	 */
 	private function has_opt_out_header( array|string $headers ): bool {
