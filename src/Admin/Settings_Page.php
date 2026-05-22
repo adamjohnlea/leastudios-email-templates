@@ -170,14 +170,14 @@ class Settings_Page {
 			'leastudios-email-templates-admin',
 			LEASTUDIOS_EMAIL_TEMPLATES_URL . 'assets/css/admin.css',
 			[],
-			LEASTUDIOS_EMAIL_TEMPLATES_VERSION
+			$this->asset_version( 'assets/css/admin.css' )
 		);
 
 		wp_enqueue_script(
 			'leastudios-email-templates-admin',
 			LEASTUDIOS_EMAIL_TEMPLATES_URL . 'assets/js/admin.js',
 			[ 'jquery', 'wp-color-picker', 'media-upload' ],
-			LEASTUDIOS_EMAIL_TEMPLATES_VERSION,
+			$this->asset_version( 'assets/js/admin.js' ),
 			true
 		);
 
@@ -569,6 +569,28 @@ class Settings_Page {
 				),
 			]
 		);
+	}
+
+	/**
+	 * Compute a cache-busting version string for an asset.
+	 *
+	 * Uses `filemtime` so editing an asset bumps its query-string version
+	 * automatically — no plugin version bump required for a CSS/JS-only
+	 * fix. Falls back to the plugin version if the file is unreadable.
+	 *
+	 * @param string $relative_path Path relative to the plugin directory.
+	 * @return string
+	 */
+	private function asset_version( string $relative_path ): string {
+		$path = LEASTUDIOS_EMAIL_TEMPLATES_DIR . $relative_path;
+
+		if ( ! file_exists( $path ) ) {
+			return LEASTUDIOS_EMAIL_TEMPLATES_VERSION;
+		}
+
+		$mtime = filemtime( $path );
+
+		return false !== $mtime ? (string) $mtime : LEASTUDIOS_EMAIL_TEMPLATES_VERSION;
 	}
 
 	/**
