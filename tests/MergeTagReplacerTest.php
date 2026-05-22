@@ -78,6 +78,33 @@ class MergeTagReplacerTest extends TestCase {
 		$this->assertSame( 'XYZ 5.00', $result );
 	}
 
+	/**
+	 * @dataProvider zero_decimal_currencies_provider
+	 *
+	 * @param string $currency Lowercase 3-letter currency code.
+	 * @param int    $amount   Amount in whole units (Stripe zero-decimal currencies pass whole-unit values).
+	 * @param string $expected The expected formatted string.
+	 */
+	public function test_format_amount_zero_decimal_currencies( string $currency, int $amount, string $expected ): void {
+		$this->assertSame( $expected, Merge_Tag_Replacer::format_amount( $amount, $currency ) );
+	}
+
+	/**
+	 * Stripe's full zero-decimal currency list (BIF, CLP, DJF, GNF, JPY, KMF,
+	 * KRW, MGA, PYG, RWF, UGX, VND, VUV, XAF, XOF, XPF). The amount is the
+	 * full unit count — no /100 division.
+	 *
+	 * @return array<string, array{0:string, 1:int, 2:string}>
+	 */
+	public static function zero_decimal_currencies_provider(): array {
+		return [
+			'KRW 1,000 = ₩1,000'        => [ 'krw', 1000, "\xe2\x82\xa9" . '1,000' ],
+			'VND 50,000 = ₫50,000'      => [ 'vnd', 50000, "\xe2\x82\xab" . '50,000' ],
+			'CLP 5,000 = CLP 5,000'     => [ 'clp', 5000, 'CLP 5,000' ],
+			'UGX 100,000 = UGX 100,000' => [ 'ugx', 100000, 'UGX 100,000' ],
+		];
+	}
+
 	public function test_merge_tags_filter(): void {
 		add_filter(
 			'leastudios_email_templates_merge_tags',

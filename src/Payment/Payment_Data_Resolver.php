@@ -137,6 +137,46 @@ class Payment_Data_Resolver {
 	}
 
 	/**
+	 * Look up the local subscription ID for a given Stripe subscription ID.
+	 *
+	 * Wraps Subscription_Repository so the listener doesn't construct it
+	 * inline and so tests can mock the lookup without a real database.
+	 *
+	 * @param string $stripe_sub_id The Stripe subscription ID.
+	 * @return int|null Local subscription ID, or null if unknown.
+	 */
+	public function get_local_subscription_id( string $stripe_sub_id ): ?int {
+		$local = $this->subscriptions->get_by_stripe_id( $stripe_sub_id );
+
+		if ( null === $local ) {
+			return null;
+		}
+
+		return (int) $local->id;
+	}
+
+	/**
+	 * Get the cumulative refunded amount currently recorded on an order.
+	 *
+	 * Returns the integer value stored in `orders.refunded_amount` (smallest
+	 * currency unit), or null if the order is missing. Used by the listener
+	 * to normalize the REST refund path — which fires with the *delta* amount —
+	 * onto the cumulative key the webhook path already uses for dedupe.
+	 *
+	 * @param int $order_id The local order ID.
+	 * @return int|null Cumulative refunded amount, or null if order not found.
+	 */
+	public function get_cumulative_refunded( int $order_id ): ?int {
+		$order = $this->orders->get( $order_id );
+
+		if ( null === $order ) {
+			return null;
+		}
+
+		return (int) ( $order->refunded_amount ?? 0 );
+	}
+
+	/**
 	 * Resolve context for a refund.
 	 *
 	 * @param int $order_id        The local order ID.
@@ -192,26 +232,72 @@ class Payment_Data_Resolver {
 	/**
 	 * Try to resolve product name from subscription data.
 	 *
+	 * Filters this customer's subscription orders by the subscription's
+	 * current `stripe_price_id` so a customer with multiple subscriptions
+	 * gets the right product name rather than whichever order was most
+	 * recent.
+	 *
 	 * @param object $sub The subscription record.
 	 * @return string
 	 */
 	private function resolve_product_from_subscription( object $sub ): string {
-		// Look for an order with this subscription's customer to get the product name.
-		if ( ! empty( $sub->stripe_customer_id ) ) {
-			global $wpdb;
-			$table = $wpdb->prefix . 'leastudios_payments_orders';
+		if ( empty( $sub->stripe_customer_id ) || empty( $sub->stripe_price_id ) ) {
+			return '';
+		}
 
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			$order = $wpdb->get_row(
-				$wpdb->prepare(
-					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-					"SELECT line_items_json FROM {$table} WHERE stripe_customer_id = %s AND order_type = 'subscription' ORDER BY id DESC LIMIT 1",
-					$sub->stripe_customer_id
-				)
-			);
+		global $wpdb;
+		$table = $wpdb->prefix . 'leastudios_payments_orders';
 
-			if ( $order && ! empty( $order->line_items_json ) ) {
-				return $this->extract_product_name( $order->line_items_json );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$orders = $wpdb->get_results(
+			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				"SELECT line_items_json FROM {$table} WHERE stripe_customer_id = %s AND order_type = 'subscription' ORDER BY id DESC",
+				$sub->stripe_customer_id
+			)
+		);
+
+		if ( empty( $orders ) ) {
+			return '';
+		}
+
+		$json_strings = array_map(
+			static fn( object $row ): string => (string) ( $row->line_items_json ?? '[]' ),
+			$orders
+		);
+
+		return self::find_product_name_for_price( $json_strings, (string) $sub->stripe_price_id );
+	}
+
+	/**
+	 * Scan a list of `line_items_json` strings (most-recent-first) and return
+	 * the description of the first line item whose `price_id` matches.
+	 *
+	 * Pure helper — no database access — so it can be unit-tested without the
+	 * payments plugin loaded. Used by `resolve_product_from_subscription`
+	 * to pick the right product when a customer has multiple subscription
+	 * orders.
+	 *
+	 * @param array<int, string> $line_items_json_rows Raw `line_items_json` strings.
+	 * @param string             $stripe_price_id      The Stripe price ID to match.
+	 * @return string Matching item description, or '' if no match.
+	 */
+	public static function find_product_name_for_price( array $line_items_json_rows, string $stripe_price_id ): string {
+		foreach ( $line_items_json_rows as $json ) {
+			$items = json_decode( $json, true );
+
+			if ( ! is_array( $items ) ) {
+				continue;
+			}
+
+			foreach ( $items as $item ) {
+				if ( ! is_array( $item ) ) {
+					continue;
+				}
+
+				if ( ( $item['price_id'] ?? '' ) === $stripe_price_id ) {
+					return (string) ( $item['description'] ?? '' );
+				}
 			}
 		}
 

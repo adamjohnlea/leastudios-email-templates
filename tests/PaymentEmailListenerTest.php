@@ -84,18 +84,53 @@ class PaymentEmailListenerTest extends TestCase {
 	public function test_on_subscription_synced_skips_non_active_status(): void {
 		$this->sender->expects( $this->never() )->method( 'send' );
 
-		$this->listener->on_subscription_synced( 'sub_123', 'canceled', [] );
+		$this->listener->on_subscription_synced( 'sub_unused_status', 'canceled', [] );
 	}
 
-	public function test_on_subscription_synced_skips_old_subscriptions(): void {
-		$this->sender->expects( $this->never() )->method( 'send' );
+	public function test_on_subscription_synced_dedupes_replays(): void {
+		// Calling the sync action twice for the same Stripe sub should send
+		// the welcome email exactly once — replays must not double-send.
+		$this->sender->expects( $this->once() )->method( 'send' );
 
-		// Subscription created 2 minutes ago — not new.
+		$this->mock_local_subscription_lookup( 7, 'replay_buyer@example.com' );
+
+		$payload = [ 'created' => time() ];
+		$this->listener->on_subscription_synced( 'sub_replay_test', 'active', $payload );
+		$this->listener->on_subscription_synced( 'sub_replay_test', 'active', $payload );
+	}
+
+	public function test_on_subscription_synced_sends_for_delayed_webhook(): void {
+		// Stripe-side `created` is hours old (slow webhook delivery or backfill),
+		// but we have never sent the welcome email for this sub → must send.
+		$this->sender->expects( $this->once() )->method( 'send' );
+
+		$this->mock_local_subscription_lookup( 11, 'delayed@example.com' );
+
 		$this->listener->on_subscription_synced(
-			'sub_123',
+			'sub_delayed_test',
 			'active',
-			[ 'created' => time() - 120 ]
+			[ 'created' => time() - ( 6 * HOUR_IN_SECONDS ) ]
 		);
+	}
+
+	/**
+	 * Stub the resolver lookup chain Payment_Email_Listener uses to load a
+	 * local subscription record and build its merge-tag context.
+	 *
+	 * @param int    $local_id The local subscription ID the lookup should return.
+	 * @param string $email    The customer email returned in the resolved context.
+	 */
+	private function mock_local_subscription_lookup( int $local_id, string $email ): void {
+		$this->resolver->method( 'get_local_subscription_id' )
+			->willReturn( $local_id );
+		$this->resolver->method( 'resolve_subscription_context' )
+			->with( $local_id )
+			->willReturn(
+				[
+					'customer_email' => $email,
+					'customer_name'  => 'Tester',
+				]
+			);
 	}
 
 	public function test_on_invoice_paid_skips_initial_invoice(): void {
@@ -159,6 +194,10 @@ class PaymentEmailListenerTest extends TestCase {
 					'refunded_amount' => '$5.00',
 				]
 			);
+		// REST handler fires with delta; the listener must normalize to cumulative.
+		$this->resolver->method( 'get_cumulative_refunded' )
+			->with( 1 )
+			->willReturn( 500 );
 
 		// Should only send once despite two calls.
 		$this->sender->expects( $this->once() )
@@ -171,5 +210,40 @@ class PaymentEmailListenerTest extends TestCase {
 
 		$this->listener->on_refund_processed( 1, 500, [] );
 		$this->listener->on_refund_issued( 1, 500, 'refunded' );
+	}
+
+	public function test_two_distinct_refunds_send_two_emails(): void {
+		// Scenario: two consecutive partial refunds of $5 each on the same order.
+		// Webhook path passes cumulative ($amount_refunded), REST path passes delta ($amount).
+		// Without normalization, the second refund's REST-path email is silently
+		// suppressed by the transient set during the first refund.
+		$this->resolver->method( 'resolve_refund_context' )
+			->willReturn(
+				[
+					'customer_email'  => 'refund@example.com',
+					'refunded_amount' => '$5.00',
+				]
+			);
+
+		// After refund 1 the order's cumulative is 500; after refund 2 it is 1000.
+		$this->resolver->method( 'get_cumulative_refunded' )
+			->willReturnOnConsecutiveCalls( 500, 1000 );
+
+		// Refund 1 and refund 2 each produce exactly one email.
+		$this->sender->expects( $this->exactly( 2 ) )
+			->method( 'send' )
+			->with(
+				Email_Type::REFUND_PROCESSED,
+				'refund@example.com',
+				$this->anything()
+			);
+
+		// Refund 1: REST (delta=500) then webhook (cumulative=500).
+		$this->listener->on_refund_issued( 1, 500, 'partial_refund' );
+		$this->listener->on_refund_processed( 1, 500, [] );
+
+		// Refund 2: REST (delta=500) then webhook (cumulative=1000).
+		$this->listener->on_refund_issued( 1, 500, 'refunded' );
+		$this->listener->on_refund_processed( 1, 1000, [] );
 	}
 }

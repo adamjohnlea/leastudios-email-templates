@@ -31,6 +31,36 @@ class Merge_Tag_Replacer {
 		'nzd' => 'NZ$',
 		'chf' => 'CHF ',
 		'jpy' => "\xc2\xa5",
+		'krw' => "\xe2\x82\xa9",
+		'vnd' => "\xe2\x82\xab",
+	];
+
+	/**
+	 * Stripe's zero-decimal currencies. Amounts are passed in whole units
+	 * rather than the smallest currency unit, so they must not be divided
+	 * by 100 when formatting for display.
+	 *
+	 * @link https://stripe.com/docs/currencies#zero-decimal
+	 *
+	 * @var array<int, string>
+	 */
+	private const ZERO_DECIMAL_CURRENCIES = [
+		'bif',
+		'clp',
+		'djf',
+		'gnf',
+		'jpy',
+		'kmf',
+		'krw',
+		'mga',
+		'pyg',
+		'rwf',
+		'ugx',
+		'vnd',
+		'vuv',
+		'xaf',
+		'xof',
+		'xpf',
 	];
 
 	/**
@@ -109,7 +139,7 @@ class Merge_Tag_Replacer {
 		$cur    = strtolower( $currency );
 		$symbol = self::CURRENCY_SYMBOLS[ $cur ] ?? strtoupper( $currency ) . ' ';
 
-		if ( 'jpy' === $cur ) {
+		if ( in_array( $cur, self::ZERO_DECIMAL_CURRENCIES, true ) ) {
 			return $symbol . number_format( $amount );
 		}
 

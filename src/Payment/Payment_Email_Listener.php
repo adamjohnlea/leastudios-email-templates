@@ -64,7 +64,14 @@ class Payment_Email_Listener {
 	}
 
 	/**
-	 * Handle subscription sync — send subscription created email for new subscriptions only.
+	 * Handle subscription sync — send the welcome email exactly once per
+	 * Stripe subscription, the first time we see it in an active/trialing
+	 * state.
+	 *
+	 * The `subscription_synced` action fires on many lifecycle events
+	 * (creation, renewal, status changes), so we use a persistent per-sub
+	 * flag rather than a time window: this avoids dropping the welcome email
+	 * for delayed webhooks and prevents duplicates on replays.
 	 *
 	 * @param string               $stripe_sub_id The Stripe subscription ID.
 	 * @param string               $local_status  The mapped local status.
@@ -72,32 +79,28 @@ class Payment_Email_Listener {
 	 * @return void
 	 */
 	public function on_subscription_synced( string $stripe_sub_id, string $local_status, array $subscription ): void {
-		// Only send for genuinely new subscriptions.
 		if ( 'active' !== $local_status && 'trialing' !== $local_status ) {
 			return;
 		}
 
-		// Check if the subscription was just created (within the last 60 seconds).
-		$created_at = $subscription['created'] ?? 0;
-		if ( abs( time() - (int) $created_at ) > 60 ) {
+		$flag_key = 'leastudios_email_templates_welcomed_' . md5( $stripe_sub_id );
+
+		if ( get_option( $flag_key ) ) {
 			return;
 		}
 
-		// Need to find the local subscription to get context.
-		$sub_repo = new \LEAStudios\Payments\Database\Subscription_Repository();
-		$local    = $sub_repo->get_by_stripe_id( $stripe_sub_id );
+		$local_id = $this->resolver->get_local_subscription_id( $stripe_sub_id );
 
-		if ( null === $local ) {
+		if ( null === $local_id ) {
 			return;
 		}
 
-		$context = $this->resolver->resolve_subscription_context( (int) $local->id );
+		$context = $this->resolver->resolve_subscription_context( $local_id );
 
 		if ( empty( $context['customer_email'] ) ) {
 			return;
 		}
 
-		// Add amount from the subscription's initial invoice if available.
 		if ( ! empty( $subscription['items']['data'][0]['price']['unit_amount'] ) ) {
 			$amount   = (int) $subscription['items']['data'][0]['price']['unit_amount'];
 			$currency = $subscription['currency'] ?? 'usd';
@@ -105,6 +108,12 @@ class Payment_Email_Listener {
 			$context['amount']   = \LEAStudios\EmailTemplates\Email\Merge_Tag_Replacer::format_amount( $amount, $currency );
 			$context['currency'] = strtoupper( $currency );
 		}
+
+		// Mark *before* sending so a synchronous re-entry (e.g. a hook chain
+		// firing `subscription_synced` again inside `wp_mail`) can't slip
+		// through. A failed send still leaves the flag set — preferable to
+		// risking duplicate welcome emails for transient SMTP errors.
+		update_option( $flag_key, time(), false );
 
 		$this->sender->send( Email_Type::SUBSCRIPTION_CREATED, $context['customer_email'], $context );
 	}
@@ -154,8 +163,11 @@ class Payment_Email_Listener {
 	/**
 	 * Handle refund webhook — send refund email.
 	 *
+	 * The webhook action passes the cumulative refunded total from the Stripe
+	 * charge object, so this is already the canonical dedupe key value.
+	 *
 	 * @param int                  $order_id        The local order ID.
-	 * @param int                  $amount_refunded The total refunded amount.
+	 * @param int                  $amount_refunded Cumulative refunded amount (from `$charge['amount_refunded']`).
 	 * @param array<string, mixed> $charge          The Stripe charge data. Required by the action signature; not consulted here.
 	 * @return void
 	 */
@@ -167,45 +179,58 @@ class Payment_Email_Listener {
 	/**
 	 * Handle admin refund — send refund email.
 	 *
+	 * The REST refund action fires with the *delta* amount of this single
+	 * refund, but the order's `refunded_amount` has already been updated to
+	 * the new cumulative total before the action runs (see
+	 * `LEAStudios\Payments\REST\Refund_Controller`). Reading the order gives
+	 * us the same cumulative key the webhook path uses, so the two paths
+	 * actually dedupe against each other.
+	 *
 	 * @param int    $order_id   The local order ID.
-	 * @param int    $amount     The refund amount.
+	 * @param int    $amount     Delta amount for this single refund (unused — superseded by the cumulative lookup).
 	 * @param string $new_status The new payment status. Required by the action signature; not consulted here.
 	 * @return void
 	 */
 	public function on_refund_issued( int $order_id, int $amount, string $new_status ): void {
-		unset( $new_status ); // Required by the leastudios_payments_refund_issued action signature; not consulted.
-		$this->send_refund_email( $order_id, $amount );
+		unset( $amount, $new_status ); // Required by the action signature; we use the cumulative from the order record instead.
+
+		$cumulative = $this->resolver->get_cumulative_refunded( $order_id );
+
+		if ( null === $cumulative ) {
+			return;
+		}
+
+		$this->send_refund_email( $order_id, $cumulative );
 	}
 
 	/**
 	 * Send a refund email with deduplication.
 	 *
-	 * Both webhook and REST hooks can fire for the same refund.
-	 * A transient lock prevents sending duplicate emails.
+	 * Both webhook and REST hooks can fire for the same refund. The dedupe
+	 * key uses the cumulative refunded amount, so a partial-then-full refund
+	 * flow sends two distinct emails (one per cumulative state) while a
+	 * webhook redelivery for the same cumulative still dedupes.
 	 *
-	 * @param int $order_id        The local order ID.
-	 * @param int $refunded_amount The refunded amount.
+	 * @param int $order_id            The local order ID.
+	 * @param int $cumulative_refunded Cumulative refunded amount in smallest currency unit.
 	 * @return void
 	 */
-	private function send_refund_email( int $order_id, int $refunded_amount ): void {
-		// Dedupe key includes the refunded amount so a partial-then-full
-		// refund flow sends two distinct emails (one per refund event)
-		// while a webhook redelivery for the same amount still dedupes.
-		$lock_key = sprintf( 'leastudios_email_templates_refund_sent_%d_%d', $order_id, $refunded_amount );
+	private function send_refund_email( int $order_id, int $cumulative_refunded ): void {
+		$lock_key = sprintf( 'leastudios_email_templates_refund_sent_%d_%d', $order_id, $cumulative_refunded );
 
 		if ( get_transient( $lock_key ) ) {
 			return;
 		}
 
-		$context = $this->resolver->resolve_refund_context( $order_id, $refunded_amount );
+		$context = $this->resolver->resolve_refund_context( $order_id, $cumulative_refunded );
 
 		if ( empty( $context['customer_email'] ) ) {
 			return;
 		}
 
-		// 10-minute window: long enough for a webhook to be retried after
-		// a slow request, short enough that distinct refunds (in the same
-		// order ID + amount tuple) are unlikely to collide.
+		// 10-minute window: long enough for a webhook to be retried after a
+		// slow request, short enough that distinct refunds (which produce a
+		// different cumulative key) are unlikely to collide.
 		set_transient( $lock_key, true, 10 * MINUTE_IN_SECONDS );
 
 		$this->sender->send( Email_Type::REFUND_PROCESSED, $context['customer_email'], $context );
