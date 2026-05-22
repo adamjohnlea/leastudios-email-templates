@@ -110,16 +110,16 @@ class Email_Log_Repository {
 	 * Fetch one row by id.
 	 *
 	 * @param int $id Row ID.
-	 * @return object|null
+	 * @return Email_Log_Entry|null
 	 */
-	public function get( int $id ): ?object {
+	public function get( int $id ): ?Email_Log_Entry {
 		global $wpdb;
 		$table = $this->table_name();
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id ) );
 
-		return $row instanceof \stdClass ? $row : null;
+		return $row instanceof \stdClass ? Email_Log_Entry::from_row( $row ) : null;
 	}
 
 	/**
@@ -128,7 +128,7 @@ class Email_Log_Repository {
 	 * @param array{type?:string, status?:string, since?:string, until?:string} $filters  Filter set.
 	 * @param int                                                               $per_page Per-page count.
 	 * @param int                                                               $page     1-based page number.
-	 * @return array{rows: array<int, object>, total: int}
+	 * @return array{rows: array<int, Email_Log_Entry>, total: int}
 	 */
 	public function paginate( array $filters, int $per_page, int $page ): array {
 		global $wpdb;
@@ -178,8 +178,17 @@ class Email_Log_Repository {
 
 		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 
+		$entries = [];
+		if ( is_array( $rows ) ) {
+			foreach ( $rows as $row ) {
+				if ( $row instanceof \stdClass ) {
+					$entries[] = Email_Log_Entry::from_row( $row );
+				}
+			}
+		}
+
 		return [
-			'rows'  => is_array( $rows ) ? $rows : [],
+			'rows'  => $entries,
 			'total' => $total,
 		];
 	}

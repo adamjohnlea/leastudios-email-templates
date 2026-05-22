@@ -12,6 +12,7 @@ namespace LEAStudios\EmailTemplates;
 // Prevent direct access.
 defined( 'ABSPATH' ) || exit;
 
+use LEAStudios\EmailTemplates\Admin\Email_Log_Page;
 use LEAStudios\EmailTemplates\Admin\Settings_Page;
 use LEAStudios\EmailTemplates\Database\Email_Log_Repository;
 use LEAStudios\EmailTemplates\Email\Email_Sender;
@@ -79,6 +80,9 @@ final class Plugin {
 		if ( is_admin() ) {
 			$settings = new Settings_Page();
 			$settings->init();
+
+			$log_page = new Email_Log_Page( $log_repo );
+			$log_page->init();
 		}
 	}
 
