@@ -86,12 +86,22 @@ class Email_Sender {
 		/**
 		 * Fires after a transactional email is sent.
 		 *
-		 * @param Email_Type $type    The email type.
-		 * @param string     $to      The recipient.
-		 * @param string     $subject The subject line.
-		 * @param bool       $result  Whether wp_mail returned true.
+		 * @param Email_Type         $type    The email type.
+		 * @param string             $to      The recipient.
+		 * @param string             $subject The subject line.
+		 * @param bool               $result  Whether wp_mail returned true.
+		 * @param string             $body    The rendered body that was passed to wp_mail.
+		 * @param array<int, string> $headers The headers passed to wp_mail.
 		 */
-		do_action( 'leastudios_email_templates_email_sent', $type, $args['to'], $args['subject'], $result );
+		do_action(
+			'leastudios_email_templates_email_sent',
+			$type,
+			$args['to'],
+			$args['subject'],
+			$result,
+			(string) $args['message'],
+			(array) $args['headers']
+		);
 
 		return $result;
 	}

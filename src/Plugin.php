@@ -13,10 +13,12 @@ namespace LEAStudios\EmailTemplates;
 defined( 'ABSPATH' ) || exit;
 
 use LEAStudios\EmailTemplates\Admin\Settings_Page;
+use LEAStudios\EmailTemplates\Database\Email_Log_Repository;
 use LEAStudios\EmailTemplates\Email\Email_Sender;
 use LEAStudios\EmailTemplates\Email\Merge_Tag_Replacer;
 use LEAStudios\EmailTemplates\Email\Plain_Text_Injector;
 use LEAStudios\EmailTemplates\Email\Template_Wrapper;
+use LEAStudios\EmailTemplates\Log\Send_Logger;
 use LEAStudios\EmailTemplates\Payment\Payment_Data_Resolver;
 use LEAStudios\EmailTemplates\Payment\Payment_Email_Listener;
 
@@ -43,6 +45,11 @@ final class Plugin {
 		// Plain-text alternative body for every HTML wp_mail.
 		$injector = new Plain_Text_Injector();
 		$injector->init();
+
+		// Persistent send log for every transactional email.
+		$log_repo = new Email_Log_Repository();
+		$logger   = new Send_Logger( $log_repo );
+		$logger->init();
 
 		// Email sender for transactional emails.
 		$sender = new Email_Sender( $replacer );
