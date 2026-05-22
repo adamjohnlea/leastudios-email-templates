@@ -412,6 +412,28 @@ class Settings_Page {
 									</code>
 								</td>
 							</tr>
+							<tr>
+								<th scope="row"><?php esc_html_e( 'Preview', 'leastudios-email-templates' ); ?></th>
+								<td>
+									<button type="button" class="button leastudios-preview-type" data-type="<?php echo esc_attr( $key ); ?>">
+										<?php esc_html_e( 'Preview This Email', 'leastudios-email-templates' ); ?>
+									</button>
+									<p class="description leastudios-preview-subject" data-type="<?php echo esc_attr( $key ); ?>" style="display:none;"></p>
+									<div class="leastudios-preview-frame" data-type="<?php echo esc_attr( $key ); ?>" style="margin-top:10px;border:1px solid #ccd0d4;background:#fff;display:none;">
+										<iframe style="width:100%;height:500px;border:0;"></iframe>
+									</div>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row"><?php esc_html_e( 'Send Test', 'leastudios-email-templates' ); ?></th>
+								<td>
+									<input type="email" class="regular-text leastudios-send-test-to" data-type="<?php echo esc_attr( $key ); ?>" placeholder="<?php echo esc_attr( wp_get_current_user()->user_email ); ?>" />
+									<button type="button" class="button leastudios-send-test" data-type="<?php echo esc_attr( $key ); ?>">
+										<?php esc_html_e( 'Send Test Email', 'leastudios-email-templates' ); ?>
+									</button>
+									<p class="description leastudios-send-test-result" data-type="<?php echo esc_attr( $key ); ?>"></p>
+								</td>
+							</tr>
 						</table>
 					</div>
 				</div>

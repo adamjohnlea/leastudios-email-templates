@@ -30,3 +30,22 @@
 	border-radius: 4px;
 	overflow: hidden;
 }
+
+.leastudios-email-type-section .leastudios-preview-frame iframe {
+	background: #fff;
+}
+
+.leastudios-email-type-section .leastudios-send-test-result {
+	margin-top: 6px;
+	font-weight: 500;
+}
+
+.leastudios-email-type-section .leastudios-send-test-to {
+	margin-right: 6px;
+}
+
+.leastudios-email-type-section .leastudios-preview-subject {
+	margin-top: 8px;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	color: #1f2937;
+}
