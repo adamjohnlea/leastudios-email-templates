@@ -70,4 +70,56 @@ class PlainTextInjectorTest extends TestCase {
 
 		$this->assertSame( '', $mail->AltBody );
 	}
+
+	public function test_mailer_args_populates_body_text_when_empty(): void {
+		$args = [
+			'body_html' => '<p>Hello <strong>world</strong>!</p>',
+			'body_text' => '',
+			'headers'   => [],
+		];
+
+		$result = $this->injector->inject_mailer_args( $args, [] );
+
+		$this->assertSame( 'Hello world!', $result['body_text'] );
+	}
+
+	public function test_mailer_args_preserves_existing_body_text(): void {
+		$args = [
+			'body_html' => '<p>Hello</p>',
+			'body_text' => 'Already set',
+			'headers'   => [],
+		];
+
+		$result = $this->injector->inject_mailer_args( $args, [] );
+
+		$this->assertSame( 'Already set', $result['body_text'] );
+	}
+
+	public function test_mailer_args_skips_when_no_html(): void {
+		$args = [
+			'body_html' => '',
+			'body_text' => 'Plain message',
+			'headers'   => [],
+		];
+
+		$result = $this->injector->inject_mailer_args( $args, [] );
+
+		$this->assertSame( 'Plain message', $result['body_text'] );
+	}
+
+	public function test_mailer_args_respects_opt_out_header(): void {
+		$args = [
+			'body_html' => '<p>Hello</p>',
+			'body_text' => '',
+			'headers'   => [ 'X-LeaStudios-No-Template: true' ],
+		];
+
+		$result = $this->injector->inject_mailer_args( $args, [] );
+
+		$this->assertSame( '', $result['body_text'] );
+	}
+
+	public function test_mailer_args_passes_null_through(): void {
+		$this->assertNull( $this->injector->inject_mailer_args( null, [] ) );
+	}
 }
