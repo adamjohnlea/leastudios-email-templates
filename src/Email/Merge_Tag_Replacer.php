@@ -152,10 +152,13 @@ class Merge_Tag_Replacer {
 	 * @return array<string, string>
 	 */
 	private function get_global_tags(): array {
+		$date_format = get_option( 'date_format', 'F j, Y' );
+		$rendered    = wp_date( is_string( $date_format ) ? $date_format : 'F j, Y' );
+
 		return [
-			'site_name' => get_option( 'blogname', '' ),
+			'site_name' => (string) get_option( 'blogname', '' ),
 			'site_url'  => home_url(),
-			'date'      => wp_date( get_option( 'date_format', 'F j, Y' ) ),
+			'date'      => false !== $rendered ? $rendered : '',
 		];
 	}
 }

@@ -148,7 +148,7 @@ class Payment_Data_Resolver {
 	public function get_local_subscription_id( string $stripe_sub_id ): ?int {
 		$local = $this->subscriptions->get_by_stripe_id( $stripe_sub_id );
 
-		if ( null === $local ) {
+		if ( null === $local || ! isset( $local->id ) ) {
 			return null;
 		}
 
@@ -224,7 +224,14 @@ class Payment_Data_Resolver {
 			return '';
 		}
 
-		$formatted = wp_date( get_option( 'date_format', 'F j, Y' ), strtotime( $date_string ) );
+		$timestamp = strtotime( $date_string );
+
+		if ( false === $timestamp ) {
+			return '';
+		}
+
+		$format    = get_option( 'date_format', 'F j, Y' );
+		$formatted = wp_date( is_string( $format ) ? $format : 'F j, Y', $timestamp );
 
 		return false !== $formatted ? $formatted : '';
 	}
