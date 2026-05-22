@@ -54,6 +54,18 @@ function leastudios_email_templates_activate(): void {
 	);
 
 	add_option( 'leastudios_email_templates_emails', [] );
+
+	// Install the email log table. The repository's install() is idempotent
+	// (option-versioned) so this is safe across re-activations.
+	if ( file_exists( __DIR__ . '/vendor/autoload.php' ) ) {
+		require_once __DIR__ . '/vendor/autoload.php';
+		( new \LEAStudios\EmailTemplates\Database\Email_Log_Repository() )->install();
+	}
+
+	// Schedule a daily prune of old log rows.
+	if ( ! wp_next_scheduled( 'leastudios_email_templates_log_prune' ) ) {
+		wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', 'leastudios_email_templates_log_prune' );
+	}
 }
 register_activation_hook( __FILE__, 'leastudios_email_templates_activate' );
 
@@ -63,7 +75,10 @@ register_activation_hook( __FILE__, 'leastudios_email_templates_activate' );
  * @return void
  */
 function leastudios_email_templates_deactivate(): void {
-	// Nothing to clean up on deactivation.
+	$timestamp = wp_next_scheduled( 'leastudios_email_templates_log_prune' );
+	if ( false !== $timestamp ) {
+		wp_unschedule_event( $timestamp, 'leastudios_email_templates_log_prune' );
+	}
 }
 register_deactivation_hook( __FILE__, 'leastudios_email_templates_deactivate' );
 

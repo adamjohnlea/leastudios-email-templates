@@ -12,3 +12,16 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 
 delete_option( 'leastudios_email_templates_branding' );
 delete_option( 'leastudios_email_templates_emails' );
+
+// Drop the email log table if the autoloader is reachable.
+if ( file_exists( __DIR__ . '/vendor/autoload.php' ) ) {
+	require_once __DIR__ . '/vendor/autoload.php';
+	( new \LEAStudios\EmailTemplates\Database\Email_Log_Repository() )->drop();
+}
+
+// Unschedule the prune cron in case deactivation didn't run.
+$leastudios_email_templates_cron_ts = wp_next_scheduled( 'leastudios_email_templates_log_prune' );
+if ( false !== $leastudios_email_templates_cron_ts ) {
+	wp_unschedule_event( $leastudios_email_templates_cron_ts, 'leastudios_email_templates_log_prune' );
+}
+unset( $leastudios_email_templates_cron_ts );

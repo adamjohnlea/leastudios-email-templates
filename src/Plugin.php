@@ -51,6 +51,20 @@ final class Plugin {
 		$logger   = new Send_Logger( $log_repo );
 		$logger->init();
 
+		// Daily prune of old log rows. Retention window is filterable.
+		add_action(
+			'leastudios_email_templates_log_prune',
+			static function () use ( $log_repo ): void {
+				/**
+				 * Filters the log retention window in days.
+				 *
+				 * @param int $days Default 30.
+				 */
+				$days = (int) apply_filters( 'leastudios_email_templates_log_retention_days', 30 );
+				$log_repo->prune_older_than( max( 1, $days ) );
+			}
+		);
+
 		// Email sender for transactional emails.
 		$sender = new Email_Sender( $replacer );
 
