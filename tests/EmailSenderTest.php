@@ -154,4 +154,48 @@ class EmailSenderTest extends TestCase {
 
 		$this->assertTrue( $result );
 	}
+
+	public function test_compose_returns_subject_body_headers_without_sending(): void {
+		update_option(
+			'leastudios_email_templates_emails',
+			[
+				'payment_receipt' => [
+					'enabled' => true,
+					'subject' => 'Receipt for {product_name}',
+					'body'    => '<p>Thanks, {customer_name}.</p>',
+				],
+			]
+		);
+
+		reset_phpmailer_instance();
+
+		$args = $this->sender->compose(
+			Email_Type::PAYMENT_RECEIPT,
+			[
+				'customer_name' => 'Alice',
+				'product_name'  => 'Widget',
+			]
+		);
+
+		$this->assertNotNull( $args );
+		$this->assertSame( 'Receipt for Widget', $args['subject'] );
+		$this->assertStringContainsString( 'Thanks, Alice.', $args['body'] );
+		$this->assertContains( 'Content-Type: text/html; charset=UTF-8', $args['headers'] );
+
+		$mailer = tests_retrieve_phpmailer_instance();
+		$this->assertEmpty( $mailer->mock_sent );
+	}
+
+	public function test_compose_returns_null_when_type_disabled(): void {
+		update_option(
+			'leastudios_email_templates_emails',
+			[
+				'payment_receipt' => [ 'enabled' => false ],
+			]
+		);
+
+		$args = $this->sender->compose( Email_Type::PAYMENT_RECEIPT, [] );
+
+		$this->assertNull( $args );
+	}
 }

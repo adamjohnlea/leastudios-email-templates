@@ -50,40 +50,32 @@ class Email_Sender {
 	 * @return bool Whether the email was sent successfully.
 	 */
 	public function send( Email_Type $type, string $to, array $context = [] ): bool {
-		$settings = $this->get_type_settings( $type );
+		$composed = $this->compose( $type, $context );
 
-		if ( empty( $settings['enabled'] ) ) {
+		if ( null === $composed ) {
 			return false;
 		}
 
-		$subject = '' !== $settings['subject'] ? $settings['subject'] : $type->default_subject();
-		$body    = '' !== $settings['body'] ? $settings['body'] : $type->default_body();
+		$settings = $this->get_type_settings( $type );
 
-		// Replace merge tags. Subject strips CR/LF; body escapes for HTML.
-		$subject = $this->replacer->replace_subject( $subject, $context );
-		$body    = $this->replacer->replace_html( $body, $context );
-
-		// Allow recipient override.
 		if ( ! empty( $settings['recipient_override'] ) && is_email( $settings['recipient_override'] ) ) {
 			$to = $settings['recipient_override'];
 		}
 
-		$headers = [ 'Content-Type: text/html; charset=UTF-8' ];
-
 		/**
 		 * Filters the email arguments before sending.
 		 *
-		 * @param array      $args    The wp_mail arguments.
-		 * @param Email_Type $type    The email type.
-		 * @param array      $context The merge tag context.
+		 * @param array<string, mixed> $args    The wp_mail arguments.
+		 * @param Email_Type           $type    The email type.
+		 * @param array<string, mixed> $context The merge tag context.
 		 */
 		$args = (array) apply_filters(
 			'leastudios_email_templates_send_args',
 			[
 				'to'      => $to,
-				'subject' => $subject,
-				'message' => $body,
-				'headers' => $headers,
+				'subject' => $composed['subject'],
+				'message' => $composed['body'],
+				'headers' => $composed['headers'],
 			],
 			$type,
 			$context
@@ -102,6 +94,38 @@ class Email_Sender {
 		do_action( 'leastudios_email_templates_email_sent', $type, $args['to'], $args['subject'], $result );
 
 		return $result;
+	}
+
+	/**
+	 * Compose subject/body/headers for an email type without sending.
+	 *
+	 * Returns null when the type is disabled. Recipient is not part of the
+	 * composed output because subject/body/headers don't depend on it; the
+	 * sender resolves recipient at send time so previews and tests can reuse
+	 * this method.
+	 *
+	 * @param Email_Type           $type    The email type.
+	 * @param array<string, mixed> $context Merge-tag values.
+	 * @return array{subject:string, body:string, headers:array<int,string>}|null
+	 */
+	public function compose( Email_Type $type, array $context = [] ): ?array {
+		$settings = $this->get_type_settings( $type );
+
+		if ( empty( $settings['enabled'] ) ) {
+			return null;
+		}
+
+		$subject = '' !== $settings['subject'] ? $settings['subject'] : $type->default_subject();
+		$body    = '' !== $settings['body'] ? $settings['body'] : $type->default_body();
+
+		$subject = $this->replacer->replace_subject( $subject, $context );
+		$body    = $this->replacer->replace_html( $body, $context );
+
+		return [
+			'subject' => $subject,
+			'body'    => $body,
+			'headers' => [ 'Content-Type: text/html; charset=UTF-8' ],
+		];
 	}
 
 	/**
