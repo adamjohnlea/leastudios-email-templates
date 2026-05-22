@@ -12,8 +12,10 @@ namespace LEAStudios\EmailTemplates\Admin;
 // Prevent direct access.
 defined( 'ABSPATH' ) || exit;
 
+use LEAStudios\EmailTemplates\Email\Email_Sender;
 use LEAStudios\EmailTemplates\Email\Email_Type;
 use LEAStudios\EmailTemplates\Email\Merge_Tag_Replacer;
+use LEAStudios\EmailTemplates\Email\Sample_Context;
 use LEAStudios\EmailTemplates\Email\Template_Wrapper;
 use LEAStudios\EmailTemplates\Security\Nonce;
 
@@ -54,6 +56,8 @@ class Settings_Page {
 		add_action( 'admin_init', [ $this, 'register_settings' ] );
 		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
 		add_action( 'wp_ajax_leastudios_email_templates_preview', [ $this, 'handle_preview' ] );
+		add_action( 'wp_ajax_leastudios_email_templates_preview_type', [ $this, 'handle_preview_type' ] );
+		add_action( 'wp_ajax_leastudios_email_templates_send_test', [ $this, 'handle_send_test' ] );
 	}
 
 	/**
@@ -445,5 +449,121 @@ class Settings_Page {
 		$html = $wrapper->wrap( $sample_body );
 
 		wp_send_json_success( [ 'html' => $html ] );
+	}
+
+	/**
+	 * AJAX handler: render a specific Email_Type with sample (or user-supplied)
+	 * subject/body and wrap it in the branded template.
+	 *
+	 * Accepts optional `subject` and `body` POST fields so the admin can
+	 * preview unsaved edits without round-tripping through Save first.
+	 *
+	 * @return void
+	 */
+	public function handle_preview_type(): void {
+		Nonce::check_ajax( 'preview' );
+
+		if ( ! current_user_can( self::CAPABILITY ) ) {
+			wp_send_json_error( __( 'Permission denied.', 'leastudios-email-templates' ) );
+		}
+
+		$type = $this->resolve_posted_type();
+
+		if ( null === $type ) {
+			wp_send_json_error( __( 'Unknown email type.', 'leastudios-email-templates' ) );
+		}
+
+		$replacer = new Merge_Tag_Replacer();
+		$wrapper  = new Template_Wrapper( $replacer );
+		$sample   = Sample_Context::for_type( $type );
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce is checked above via Nonce::check_ajax.
+		$subject_tpl = isset( $_POST['subject'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['subject'] ) ) : '';
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce is checked above via Nonce::check_ajax.
+		$body_tpl = isset( $_POST['body'] ) ? wp_kses_post( wp_unslash( (string) $_POST['body'] ) ) : '';
+
+		if ( '' === $subject_tpl ) {
+			$subject_tpl = $type->default_subject();
+		}
+		if ( '' === $body_tpl ) {
+			$body_tpl = $type->default_body();
+		}
+
+		$rendered_subject = $replacer->replace_subject( $subject_tpl, $sample );
+		$rendered_body    = $replacer->replace_html( $body_tpl, $sample );
+
+		$html = $wrapper->wrap( $rendered_body );
+
+		wp_send_json_success(
+			[
+				'subject' => $rendered_subject,
+				'html'    => $html,
+			]
+		);
+	}
+
+	/**
+	 * AJAX handler: send a real sample email of the given type to a chosen
+	 * address. Uses Sample_Context so all merge tags resolve to recognisable
+	 * placeholder values.
+	 *
+	 * @return void
+	 */
+	public function handle_send_test(): void {
+		Nonce::check_ajax( 'preview' );
+
+		if ( ! current_user_can( self::CAPABILITY ) ) {
+			wp_send_json_error( __( 'Permission denied.', 'leastudios-email-templates' ) );
+		}
+
+		$type = $this->resolve_posted_type();
+
+		if ( null === $type ) {
+			wp_send_json_error( __( 'Unknown email type.', 'leastudios-email-templates' ) );
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce is checked above via Nonce::check_ajax.
+		$to = isset( $_POST['to'] ) ? sanitize_email( wp_unslash( (string) $_POST['to'] ) ) : '';
+
+		if ( '' === $to || ! is_email( $to ) ) {
+			wp_send_json_error( __( 'A valid email address is required.', 'leastudios-email-templates' ) );
+		}
+
+		$sender = new Email_Sender( new Merge_Tag_Replacer() );
+		$result = $sender->send( $type, $to, Sample_Context::for_type( $type ) );
+
+		if ( ! $result ) {
+			wp_send_json_error(
+				__( 'Email could not be sent. Check that this email type is enabled and that wp_mail is configured.', 'leastudios-email-templates' )
+			);
+		}
+
+		wp_send_json_success(
+			[
+				'message' => sprintf(
+					/* translators: %s is the recipient email address. */
+					__( 'Test email sent to %s.', 'leastudios-email-templates' ),
+					$to
+				),
+			]
+		);
+	}
+
+	/**
+	 * Map a POSTed `type` key to its Email_Type case.
+	 *
+	 * @return Email_Type|null
+	 */
+	private function resolve_posted_type(): ?Email_Type {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Callers verify the nonce before invoking this helper.
+		$raw = isset( $_POST['type'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['type'] ) ) : '';
+
+		foreach ( Email_Type::cases() as $case ) {
+			if ( $case->value === $raw ) {
+				return $case;
+			}
+		}
+
+		return null;
 	}
 }
