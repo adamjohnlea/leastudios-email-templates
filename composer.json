@@ -4,7 +4,7 @@
     "type": "wordpress-plugin",
     "license": "GPL-2.0-or-later",
     "require": {
-        "php": ">=8.1"
+        "php": ">=8.2"
     },
     "require-dev": {
         "php-stubs/wordpress-stubs": "^6.7",
@@ -28,7 +28,10 @@
             "dealerdirect/phpcodesniffer-composer-installer": true,
             "phpstan/extension-installer": true
         },
-        "sort-packages": true
+        "sort-packages": true,
+        "platform": {
+            "php": "8.2"
+        }
     },
     "scripts": {
         "phpcs": "phpcs",
