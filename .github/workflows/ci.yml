@@ -10,8 +10,16 @@ jobs:
     name: Lint (PHPCS + PHPStan)
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: Check out leastudios-email-templates
         uses: actions/checkout@v4
+        with:
+          path: leastudios-email-templates
+
+      - name: Check out leastudios-payments
+        uses: actions/checkout@v4
+        with:
+          repository: adamjohnlea/leastudios-payments
+          path: leastudios-payments
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -21,12 +29,16 @@ jobs:
 
       - name: Install Composer dependencies
         uses: ramsey/composer-install@v3
+        with:
+          working-directory: leastudios-email-templates
 
       - name: Run PHPCS
         run: composer phpcs
+        working-directory: leastudios-email-templates
 
       - name: Run PHPStan
         run: composer phpstan
+        working-directory: leastudios-email-templates
 
   test:
     name: Tests (PHP ${{ matrix.php }})
