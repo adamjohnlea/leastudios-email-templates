@@ -85,8 +85,19 @@ class SendLoggerTest extends TestCase {
 		$this->assertSame( 'cli-test', $page['rows'][0]->source );
 	}
 
-	public function test_record_defaults_source_to_web(): void {
-		$this->logger->record(
+	public function test_record_defaults_source_to_web_in_php_payload(): void {
+		$spy = new class extends Email_Log_Repository {
+			/** @var array<string, mixed>|null */
+			public ?array $last_data = null;
+
+			public function create( array $data ): int {
+				$this->last_data = $data;
+				return 1;
+			}
+		};
+
+		$logger = new Send_Logger( $spy );
+		$logger->record(
 			'payment_receipt',
 			'buyer@example.com',
 			'Receipt',
@@ -95,8 +106,9 @@ class SendLoggerTest extends TestCase {
 			[ 'Content-Type: text/html' ]
 		);
 
-		$page = $this->repo->paginate( [], 10, 1 );
-		$this->assertSame( 'web', $page['rows'][0]->source );
+		$this->assertNotNull( $spy->last_data );
+		$this->assertArrayHasKey( 'source', $spy->last_data );
+		$this->assertSame( 'web', $spy->last_data['source'] );
 	}
 
 	public function test_init_registers_subscriber_with_seven_accepted_args(): void {
