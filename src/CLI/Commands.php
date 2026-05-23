@@ -120,8 +120,7 @@ class Commands {
 	 * ## OPTIONS
 	 *
 	 * <type>
-	 * : The registered email type id (e.g. `payment_receipt`). Run
-	 * : `wp leastudios-email-templates list-types` to see all ids.
+	 * : The registered email type id (e.g. `payment_receipt`). Run `wp leastudios-email-templates list-types` to see all ids.
 	 *
 	 * [--context=<json>]
 	 * : JSON-encoded merge-tag context overrides. Keys are unbraced tag names.
@@ -223,8 +222,7 @@ class Commands {
 	 * : Recipient email address. No confirmation is shown.
 	 *
 	 * [--dry-run]
-	 * : Compose the email and print the wp_mail args without dispatching.
-	 * : No log row is created.
+	 * : Compose the email and print the wp_mail args without dispatching. No log row is created.
 	 *
 	 * ## EXAMPLES
 	 *
