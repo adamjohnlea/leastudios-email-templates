@@ -15,7 +15,13 @@ defined( 'ABSPATH' ) || exit;
 use LEAStudios\EmailTemplates\Admin\Email_Log_Page;
 use LEAStudios\EmailTemplates\Admin\Settings_Page;
 use LEAStudios\EmailTemplates\Database\Email_Log_Repository;
+use LEAStudios\EmailTemplates\Email\Built_In\Payment_Failed;
+use LEAStudios\EmailTemplates\Email\Built_In\Payment_Receipt;
+use LEAStudios\EmailTemplates\Email\Built_In\Refund_Processed;
+use LEAStudios\EmailTemplates\Email\Built_In\Subscription_Created;
+use LEAStudios\EmailTemplates\Email\Built_In\Subscription_Renewed;
 use LEAStudios\EmailTemplates\Email\Email_Sender;
+use LEAStudios\EmailTemplates\Email\Email_Type_Registry;
 use LEAStudios\EmailTemplates\Email\Merge_Tag_Replacer;
 use LEAStudios\EmailTemplates\Email\Plain_Text_Injector;
 use LEAStudios\EmailTemplates\Email\Template_Wrapper;
@@ -67,7 +73,14 @@ final class Plugin {
 		);
 
 		// Email sender for transactional emails.
-		$sender = new Email_Sender( $replacer );
+		$registry = new Email_Type_Registry();
+		$registry->register( new Payment_Receipt() );
+		$registry->register( new Subscription_Created() );
+		$registry->register( new Subscription_Renewed() );
+		$registry->register( new Payment_Failed() );
+		$registry->register( new Refund_Processed() );
+
+		$sender = new Email_Sender( $replacer, $registry );
 
 		// Payment integration (only when payments plugin is active).
 		if ( $this->is_payments_active() ) {

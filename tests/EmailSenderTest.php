@@ -9,8 +9,13 @@ declare(strict_types=1);
 
 namespace LEAStudios\EmailTemplates\Tests;
 
+use LEAStudios\EmailTemplates\Email\Built_In\Payment_Failed;
+use LEAStudios\EmailTemplates\Email\Built_In\Payment_Receipt;
+use LEAStudios\EmailTemplates\Email\Built_In\Refund_Processed;
+use LEAStudios\EmailTemplates\Email\Built_In\Subscription_Created;
+use LEAStudios\EmailTemplates\Email\Built_In\Subscription_Renewed;
 use LEAStudios\EmailTemplates\Email\Email_Sender;
-use LEAStudios\EmailTemplates\Email\Email_Type;
+use LEAStudios\EmailTemplates\Email\Email_Type_Registry;
 use LEAStudios\EmailTemplates\Email\Merge_Tag_Replacer;
 use LEAStudios\Tests\TestCase;
 
@@ -23,9 +28,16 @@ class EmailSenderTest extends TestCase {
 
 	public function set_up(): void {
 		parent::set_up();
-		$this->sender = new Email_Sender( new Merge_Tag_Replacer() );
 
-		// Reset to allow wp_mail to be captured.
+		$registry = new Email_Type_Registry();
+		$registry->register( new Payment_Receipt() );
+		$registry->register( new Subscription_Created() );
+		$registry->register( new Subscription_Renewed() );
+		$registry->register( new Payment_Failed() );
+		$registry->register( new Refund_Processed() );
+
+		$this->sender = new Email_Sender( new Merge_Tag_Replacer(), $registry );
+
 		reset_phpmailer_instance();
 	}
 
@@ -38,7 +50,7 @@ class EmailSenderTest extends TestCase {
 		);
 
 		$result = $this->sender->send(
-			Email_Type::PAYMENT_RECEIPT,
+			'payment_receipt',
 			'test@example.com',
 			[
 				'customer_name' => 'Test',
@@ -63,7 +75,7 @@ class EmailSenderTest extends TestCase {
 		);
 
 		$this->sender->send(
-			Email_Type::PAYMENT_RECEIPT,
+			'payment_receipt',
 			'test@example.com',
 			[ 'product_name' => 'My Widget' ]
 		);
@@ -85,7 +97,7 @@ class EmailSenderTest extends TestCase {
 		);
 
 		$this->sender->send(
-			Email_Type::PAYMENT_RECEIPT,
+			'payment_receipt',
 			'test@example.com',
 			[ 'product_name' => 'Gadget' ]
 		);
@@ -108,7 +120,7 @@ class EmailSenderTest extends TestCase {
 		);
 
 		$this->sender->send(
-			Email_Type::PAYMENT_RECEIPT,
+			'payment_receipt',
 			'customer@example.com',
 			[]
 		);
@@ -135,7 +147,7 @@ class EmailSenderTest extends TestCase {
 		);
 
 		$this->sender->send(
-			Email_Type::PAYMENT_RECEIPT,
+			'payment_receipt',
 			'test@example.com',
 			[ 'product_name' => 'Test' ]
 		);
@@ -147,7 +159,7 @@ class EmailSenderTest extends TestCase {
 		delete_option( 'leastudios_email_templates_emails' );
 
 		$result = $this->sender->send(
-			Email_Type::PAYMENT_RECEIPT,
+			'payment_receipt',
 			'test@example.com',
 			[ 'product_name' => 'Test' ]
 		);
@@ -170,7 +182,7 @@ class EmailSenderTest extends TestCase {
 		reset_phpmailer_instance();
 
 		$args = $this->sender->compose(
-			Email_Type::PAYMENT_RECEIPT,
+			'payment_receipt',
 			[
 				'customer_name' => 'Alice',
 				'product_name'  => 'Widget',
@@ -194,8 +206,18 @@ class EmailSenderTest extends TestCase {
 			]
 		);
 
-		$args = $this->sender->compose( Email_Type::PAYMENT_RECEIPT, [] );
+		$args = $this->sender->compose( 'payment_receipt', [] );
 
 		$this->assertNull( $args );
+	}
+
+	public function test_send_returns_false_for_unknown_type_id(): void {
+		$result = $this->sender->send( 'does_not_exist', 'test@example.com', [] );
+
+		$this->assertFalse( $result );
+	}
+
+	public function test_compose_returns_null_for_unknown_type_id(): void {
+		$this->assertNull( $this->sender->compose( 'does_not_exist', [] ) );
 	}
 }

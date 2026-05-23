@@ -1,6 +1,6 @@
 <?php
 /**
- * Sends transactional emails by type.
+ * Sends transactional emails by registered type id.
  *
  * @package LEAStudios\EmailTemplates\Email
  */
@@ -13,20 +13,19 @@ namespace LEAStudios\EmailTemplates\Email;
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Composes and sends emails for a given Email_Type.
+ * Composes and sends emails for any type registered in Email_Type_Registry.
  */
 class Email_Sender {
 
 	/**
-	 * Per-request memoized copy of the email-types option array, or null
-	 * when not yet populated / freshly invalidated.
+	 * Per-request memoized copy of the email-types option array.
 	 *
 	 * @var array<string, array<string, mixed>>|null
 	 */
 	private ?array $type_settings_cache = null;
 
 	/**
-	 * Whether we've already registered the option-update invalidation hooks.
+	 * Whether the option-update invalidation hooks have been registered.
 	 *
 	 * @var bool
 	 */
@@ -35,28 +34,37 @@ class Email_Sender {
 	/**
 	 * Constructor.
 	 *
-	 * @param Merge_Tag_Replacer $replacer The merge tag replacer.
+	 * @param Merge_Tag_Replacer  $replacer The merge tag replacer.
+	 * @param Email_Type_Registry $registry The type registry.
 	 */
 	public function __construct(
 		private readonly Merge_Tag_Replacer $replacer,
+		private readonly Email_Type_Registry $registry,
 	) {}
 
 	/**
 	 * Send an email of the specified type.
 	 *
-	 * @param Email_Type           $type    The email type to send.
-	 * @param string               $to      The recipient email address.
-	 * @param array<string, mixed> $context The merge tag values.
-	 * @return bool Whether the email was sent successfully.
+	 * @param string               $type_id The registered email type id.
+	 * @param string               $to      Recipient address.
+	 * @param array<string, mixed> $context Merge-tag values.
+	 * @return bool Whether wp_mail returned true. Returns false if the id is
+	 *              unknown or the type is disabled.
 	 */
-	public function send( Email_Type $type, string $to, array $context = [] ): bool {
-		$composed = $this->compose( $type, $context );
+	public function send( string $type_id, string $to, array $context = [] ): bool {
+		$definition = $this->registry->get( $type_id );
+
+		if ( null === $definition ) {
+			return false;
+		}
+
+		$composed = $this->compose( $type_id, $context );
 
 		if ( null === $composed ) {
 			return false;
 		}
 
-		$settings = $this->get_type_settings( $type );
+		$settings = $this->get_type_settings( $type_id );
 
 		if ( ! empty( $settings['recipient_override'] ) && is_email( $settings['recipient_override'] ) ) {
 			$to = $settings['recipient_override'];
@@ -66,7 +74,7 @@ class Email_Sender {
 		 * Filters the email arguments before sending.
 		 *
 		 * @param array<string, mixed> $args    The wp_mail arguments.
-		 * @param Email_Type           $type    The email type.
+		 * @param string               $type_id The registered type id.
 		 * @param array<string, mixed> $context The merge tag context.
 		 */
 		$args = (array) apply_filters(
@@ -77,7 +85,7 @@ class Email_Sender {
 				'message' => $composed['body'],
 				'headers' => $composed['headers'],
 			],
-			$type,
+			$type_id,
 			$context
 		);
 
@@ -86,7 +94,7 @@ class Email_Sender {
 		/**
 		 * Fires after a transactional email is sent.
 		 *
-		 * @param Email_Type         $type    The email type.
+		 * @param string             $type_id The registered type id.
 		 * @param string             $to      The recipient.
 		 * @param string             $subject The subject line.
 		 * @param bool               $result  Whether wp_mail returned true.
@@ -95,7 +103,7 @@ class Email_Sender {
 		 */
 		do_action(
 			'leastudios_email_templates_email_sent',
-			$type,
+			$type_id,
 			$args['to'],
 			$args['subject'],
 			$result,
@@ -107,29 +115,30 @@ class Email_Sender {
 	}
 
 	/**
-	 * Compose subject/body/headers for an email type without sending.
+	 * Compose subject/body/headers without sending.
 	 *
-	 * Returns null when the type is disabled. Recipient is not part of the
-	 * composed output because subject/body/headers don't depend on it; the
-	 * sender resolves recipient at send time so previews and tests can reuse
-	 * this method.
-	 *
-	 * @param Email_Type           $type    The email type.
+	 * @param string               $type_id Registered email type id.
 	 * @param array<string, mixed> $context Merge-tag values.
 	 * @return array{subject:string, body:string, headers:array<int,string>}|null
 	 */
-	public function compose( Email_Type $type, array $context = [] ): ?array {
-		$settings = $this->get_type_settings( $type );
+	public function compose( string $type_id, array $context = [] ): ?array {
+		$definition = $this->registry->get( $type_id );
+
+		if ( null === $definition ) {
+			return null;
+		}
+
+		$settings = $this->get_type_settings( $type_id );
 
 		if ( empty( $settings['enabled'] ) ) {
 			return null;
 		}
 
-		$subject = '' !== $settings['subject'] ? $settings['subject'] : $type->default_subject();
-		$body    = '' !== $settings['body'] ? $settings['body'] : $type->default_body();
+		$subject = '' !== $settings['subject'] ? $settings['subject'] : $definition->default_subject();
+		$body    = '' !== $settings['body'] ? $settings['body'] : $definition->default_body();
 
 		$subject = $this->replacer->replace_subject( $subject, $context );
-		$body    = $this->replacer->replace_html( $body, $context, $type->escape_map() );
+		$body    = $this->replacer->replace_html( $body, $context, $definition->escape_map() );
 
 		return [
 			'subject' => $subject,
@@ -139,20 +148,12 @@ class Email_Sender {
 	}
 
 	/**
-	 * Get settings for a specific email type.
+	 * Get settings for a specific type id. Memoizes the option array.
 	 *
-	 * Memoizes the option read for the lifetime of the request so a batch
-	 * of emails sent in one PHP process (e.g. bulk-refund webhooks) does not
-	 * re-query the options table once per send. WordPress's options cache
-	 * already keeps the value warm, but this skips a function-call layer
-	 * and the array_key resolution per call too. Hook
-	 * `update_option_leastudios_email_templates_emails` to bust mid-request
-	 * if a settings save lands during the same PHP process.
-	 *
-	 * @param Email_Type $type The email type.
+	 * @param string $type_id The registered type id.
 	 * @return array{enabled: bool, subject: string, body: string, recipient_override: string}
 	 */
-	private function get_type_settings( Email_Type $type ): array {
+	private function get_type_settings( string $type_id ): array {
 		if ( ! $this->cache_hooks_registered ) {
 			$this->cache_hooks_registered = true;
 			$invalidate                   = function (): void {
@@ -174,7 +175,7 @@ class Email_Sender {
 			'recipient_override' => '',
 		];
 
-		$settings = $this->type_settings_cache[ $type->value ] ?? [];
+		$settings = $this->type_settings_cache[ $type_id ] ?? [];
 
 		return array_merge( $defaults, $settings );
 	}

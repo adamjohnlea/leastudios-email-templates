@@ -13,7 +13,6 @@ namespace LEAStudios\EmailTemplates\Log;
 defined( 'ABSPATH' ) || exit;
 
 use LEAStudios\EmailTemplates\Database\Email_Log_Repository;
-use LEAStudios\EmailTemplates\Email\Email_Type;
 
 /**
  * Subscribes to the `leastudios_email_templates_email_sent` action and
@@ -45,7 +44,7 @@ class Send_Logger {
 	/**
 	 * Record a single send.
 	 *
-	 * @param Email_Type         $type    The email type.
+	 * @param string             $type_id The registered email type id.
 	 * @param string             $to      The recipient.
 	 * @param string             $subject The subject line.
 	 * @param bool               $result  Whether wp_mail returned true.
@@ -53,10 +52,10 @@ class Send_Logger {
 	 * @param array<int, string> $headers Headers that were sent.
 	 * @return void
 	 */
-	public function record( Email_Type $type, string $to, string $subject, bool $result, string $body = '', array $headers = [] ): void {
+	public function record( string $type_id, string $to, string $subject, bool $result, string $body = '', array $headers = [] ): void {
 		$this->repo->create(
 			[
-				'type'      => $type->value,
+				'type'      => $type_id,
 				'recipient' => $to,
 				'subject'   => $subject,
 				'body'      => $body,
