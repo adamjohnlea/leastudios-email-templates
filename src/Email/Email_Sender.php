@@ -117,6 +117,11 @@ class Email_Sender {
 	/**
 	 * Compose subject/body/headers without sending.
 	 *
+	 * Returns null when the type id is unregistered or the type is disabled.
+	 * Recipient is not part of the composed output — subject/body/headers
+	 * don't depend on it — so previews and settings-page AJAX can call this
+	 * without a real To address.
+	 *
 	 * @param string               $type_id Registered email type id.
 	 * @param array<string, mixed> $context Merge-tag values.
 	 * @return array{subject:string, body:string, headers:array<int,string>}|null
@@ -148,7 +153,15 @@ class Email_Sender {
 	}
 
 	/**
-	 * Get settings for a specific type id. Memoizes the option array.
+	 * Get settings for a specific type id.
+	 *
+	 * Memoizes the option read for the lifetime of the request so a batch
+	 * of emails sent in one PHP process (e.g. bulk-refund webhooks) does not
+	 * re-query the options table once per send. WordPress's options cache
+	 * already keeps the value warm, but this skips a function-call layer
+	 * and the array_key resolution per call too. Hook
+	 * `update_option_leastudios_email_templates_emails` to bust mid-request
+	 * if a settings save lands during the same PHP process.
 	 *
 	 * @param string $type_id The registered type id.
 	 * @return array{enabled: bool, subject: string, body: string, recipient_override: string}
