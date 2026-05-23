@@ -37,6 +37,11 @@
 
     <rule ref="PHPCompatibilityWP"/>
 
+    <!-- Allow multiple class definitions per file in tests (fixture classes alongside test class). -->
+    <rule ref="Generic.Files.OneObjectStructurePerFile">
+        <exclude-pattern>tests/</exclude-pattern>
+    </rule>
+
     <!-- Relax docblock requirements in tests; test names are the documentation. -->
     <rule ref="Squiz.Commenting.FunctionComment.Missing">
         <exclude-pattern>tests/</exclude-pattern>
