@@ -395,11 +395,15 @@ class Commands {
 	 * and by tests. Public so the data shape can be asserted without
 	 * mocking the WP_CLI output.
 	 *
+	 * Capped at 1000 rows. The CLI list is for support/ops, not bulk
+	 * export — the page is filterable from the admin side and the
+	 * suppressions table is expected to stay well below the cap on
+	 * any real site. Sites that need bulk export should query the
+	 * table directly via wp db query or the repository class.
+	 *
 	 * @return array<int, array{email:string, suppressed_at:string, source:string}>
 	 */
 	public function build_suppression_rows(): array {
-		// 1000 is a generous ceiling — the page is filterable from the admin
-		// side; the CLI list is for support/ops, not bulk export.
 		$page = $this->manager->paginate( [], 1000, 1 );
 
 		$rows = [];
