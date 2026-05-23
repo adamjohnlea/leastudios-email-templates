@@ -529,6 +529,93 @@ class EmailSenderTest extends TestCase {
 		);
 	}
 
+	public function test_gate_evaluates_resolved_delivery_address_when_override_is_set(): void {
+		// Suppress the original $to. Set a recipient_override that is NOT
+		// suppressed. The email must still send to the override target.
+		$this->manager->suppress( 'jane@example.com', 'cli' );
+
+		update_option(
+			'leastudios_email_templates_emails',
+			[
+				'phase9_fixture' => [
+					'enabled'            => true,
+					'subject'            => '',
+					'body'               => '',
+					'recipient_override' => 'ops@example.com',
+				],
+			]
+		);
+		$this->register_phase9_fixture();
+
+		$captured_to = null;
+		add_filter(
+			'pre_wp_mail',
+			static function ( $value, $atts ) use ( &$captured_to ) {
+				$captured_to = $atts['to'];
+				return true; // Short-circuit wp_mail.
+			},
+			10,
+			2
+		);
+
+		$result = $this->sender->send( 'phase9_fixture', 'jane@example.com', [], 'web' );
+
+		remove_all_filters( 'pre_wp_mail' );
+		delete_option( 'leastudios_email_templates_emails' );
+
+		$this->assertTrue( $result, 'send must succeed when only the original $to is suppressed' );
+		$this->assertSame( 'ops@example.com', $captured_to, 'wp_mail must receive the override address' );
+	}
+
+	public function test_gate_fires_when_override_target_itself_is_suppressed(): void {
+		$this->manager->suppress( 'ops@example.com', 'cli' );
+
+		update_option(
+			'leastudios_email_templates_emails',
+			[
+				'phase9_fixture' => [
+					'enabled'            => true,
+					'subject'            => '',
+					'body'               => '',
+					'recipient_override' => 'ops@example.com',
+				],
+			]
+		);
+		$this->register_phase9_fixture();
+
+		$mail_called = false;
+		add_filter(
+			'pre_wp_mail',
+			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- $value is the pre_wp_mail signature, not used here.
+			static function ( $value ) use ( &$mail_called ) {
+				$mail_called = true;
+				return false;
+			}
+		);
+
+		$suppressed_args = null;
+		add_action(
+			'leastudios_email_templates_email_suppressed',
+			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- compact() reads each variable by name.
+			static function ( $type_id, $to, $subject, $body, $headers, $source ) use ( &$suppressed_args ): void {
+				$suppressed_args = compact( 'type_id', 'to', 'subject', 'body', 'headers', 'source' );
+			},
+			10,
+			6
+		);
+
+		$result = $this->sender->send( 'phase9_fixture', 'jane@example.com', [], 'web' );
+
+		remove_all_filters( 'pre_wp_mail' );
+		remove_all_actions( 'leastudios_email_templates_email_suppressed' );
+		delete_option( 'leastudios_email_templates_emails' );
+
+		$this->assertFalse( $result );
+		$this->assertFalse( $mail_called );
+		$this->assertNotNull( $suppressed_args );
+		$this->assertSame( 'ops@example.com', $suppressed_args['to'], '_email_suppressed must record the resolved delivery address' );
+	}
+
 	public function test_unsubscribe_footer_html_filter_applied(): void {
 		add_filter(
 			'leastudios_email_templates_unsubscribe_footer_html',

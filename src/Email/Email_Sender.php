@@ -65,21 +65,26 @@ class Email_Sender {
 			return false;
 		}
 
-		// Phase 9 — suppression gate. Required types bypass.
-		if ( ! $definition->is_transactional_required() && '' !== $to && $this->manager->is_suppressed( $to ) ) {
-			return $this->fire_suppressed( $type_id, $to, $context, $source );
+		// Resolve recipient_override BEFORE gating — the suppression check is
+		// against who would actually receive the mail, not the original $to.
+		$settings = $this->get_type_settings( $type_id );
+		$delivery = $to;
+		if ( ! empty( $settings['recipient_override'] ) && is_email( $settings['recipient_override'] ) ) {
+			$delivery = (string) $settings['recipient_override'];
 		}
 
-		$composed = $this->compose( $type_id, $context, $to );
+		// Phase 9 — suppression gate. Required types bypass. The gate target
+		// is the resolved delivery address, so a redirect via recipient_override
+		// is checked against the override target's opt-out preference, not the
+		// original caller-supplied address.
+		if ( ! $definition->is_transactional_required() && '' !== $delivery && $this->manager->is_suppressed( $delivery ) ) {
+			return $this->fire_suppressed( $type_id, $delivery, $context, $source );
+		}
+
+		$composed = $this->compose( $type_id, $context, $delivery );
 
 		if ( null === $composed ) {
 			return false;
-		}
-
-		$settings = $this->get_type_settings( $type_id );
-
-		if ( ! empty( $settings['recipient_override'] ) && is_email( $settings['recipient_override'] ) ) {
-			$to = $settings['recipient_override'];
 		}
 
 		/**
@@ -92,7 +97,7 @@ class Email_Sender {
 		$args = (array) apply_filters(
 			'leastudios_email_templates_send_args',
 			[
-				'to'      => $to,
+				'to'      => $delivery,
 				'subject' => $composed['subject'],
 				'message' => $composed['body'],
 				'headers' => $composed['headers'],
@@ -104,8 +109,8 @@ class Email_Sender {
 		// Phase 9 — auto-append the unsubscribe footer for non-required types
 		// with a real recipient. Required types and empty recipients skip
 		// this; the wrapper (Template_Wrapper) downstream stays type-ignorant.
-		if ( ! $definition->is_transactional_required() && '' !== $to && is_email( $to ) ) {
-			$args['message'] .= $this->render_unsubscribe_footer( $to, $type_id );
+		if ( ! $definition->is_transactional_required() && '' !== $delivery && is_email( $delivery ) ) {
+			$args['message'] .= $this->render_unsubscribe_footer( $delivery, $type_id );
 		}
 
 		$result = wp_mail( $args['to'], $args['subject'], $args['message'], $args['headers'] );
