@@ -125,6 +125,26 @@ class Email_Log_List_Table extends \WP_List_Table {
 	}
 
 	/**
+	 * Recipient column — appends `(cli)` when the row was created by the
+	 * `wp leastudios-email-templates send-test` command.
+	 *
+	 * @param Email_Log_Entry $item Row.
+	 * @return string
+	 */
+	public function column_recipient( $item ): string {
+		$html = esc_html( $item->recipient );
+
+		if ( 'web' !== $item->source ) {
+			$html .= sprintf(
+				' <span class="leastudios-source-badge" style="color:#646970;font-size:11px;">(%s)</span>',
+				esc_html( 'cli-test' === $item->source ? 'cli' : $item->source )
+			);
+		}
+
+		return $html;
+	}
+
+	/**
 	 * Actions column — View and Resend.
 	 *
 	 * @param Email_Log_Entry $item Row.
