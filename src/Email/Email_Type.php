@@ -73,53 +73,148 @@ enum Email_Type: string {
 	/**
 	 * Get available merge tags for this email type.
 	 *
-	 * @return array<string, string> Tag => description.
+	 * @return array<string, array{description: string, escape: Escape_Mode}>
 	 */
 	public function available_tags(): array {
 		$common = [
-			'{customer_name}'  => __( 'Customer name', 'leastudios-email-templates' ),
-			'{customer_email}' => __( 'Customer email', 'leastudios-email-templates' ),
-			'{site_name}'      => __( 'Site name', 'leastudios-email-templates' ),
-			'{site_url}'       => __( 'Site URL', 'leastudios-email-templates' ),
-			'{date}'           => __( 'Current date', 'leastudios-email-templates' ),
+			'{customer_name}'  => [
+				'description' => __( 'Customer name', 'leastudios-email-templates' ),
+				'escape'      => Escape_Mode::HTML,
+			],
+			'{customer_email}' => [
+				'description' => __( 'Customer email', 'leastudios-email-templates' ),
+				'escape'      => Escape_Mode::HTML,
+			],
+			'{site_name}'      => [
+				'description' => __( 'Site name', 'leastudios-email-templates' ),
+				'escape'      => Escape_Mode::HTML,
+			],
+			'{site_url}'       => [
+				'description' => __( 'Site URL', 'leastudios-email-templates' ),
+				'escape'      => Escape_Mode::URL,
+			],
+			'{date}'           => [
+				'description' => __( 'Current date', 'leastudios-email-templates' ),
+				'escape'      => Escape_Mode::HTML,
+			],
 		];
 
 		$specific = match ( $this ) {
-			self::PAYMENT_RECEIPT => [
-				'{amount}'       => __( 'Payment amount', 'leastudios-email-templates' ),
-				'{currency}'     => __( 'Currency code', 'leastudios-email-templates' ),
-				'{product_name}' => __( 'Product name', 'leastudios-email-templates' ),
-				'{order_type}'   => __( 'Order type (one-time or subscription)', 'leastudios-email-templates' ),
-				'{payment_id}'   => __( 'Stripe Payment Intent ID', 'leastudios-email-templates' ),
-				'{order_id}'     => __( 'Local order ID', 'leastudios-email-templates' ),
+			self::PAYMENT_RECEIPT      => [
+				'{amount}'       => [
+					'description' => __( 'Payment amount', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
+				'{currency}'     => [
+					'description' => __( 'Currency code', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
+				'{product_name}' => [
+					'description' => __( 'Product name', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
+				'{order_type}'   => [
+					'description' => __( 'Order type (one-time or subscription)', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
+				'{payment_id}'   => [
+					'description' => __( 'Stripe Payment Intent ID', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
+				'{order_id}'     => [
+					'description' => __( 'Local order ID', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
 			],
 			self::SUBSCRIPTION_CREATED => [
-				'{product_name}' => __( 'Product name', 'leastudios-email-templates' ),
-				'{amount}'       => __( 'Payment amount', 'leastudios-email-templates' ),
-				'{currency}'     => __( 'Currency code', 'leastudios-email-templates' ),
-				'{period_end}'   => __( 'Current period end date', 'leastudios-email-templates' ),
+				'{product_name}' => [
+					'description' => __( 'Product name', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
+				'{amount}'       => [
+					'description' => __( 'Payment amount', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
+				'{currency}'     => [
+					'description' => __( 'Currency code', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
+				'{period_end}'   => [
+					'description' => __( 'Current period end date', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
 			],
 			self::SUBSCRIPTION_RENEWED => [
-				'{product_name}'   => __( 'Product name', 'leastudios-email-templates' ),
-				'{invoice_amount}' => __( 'Invoice amount', 'leastudios-email-templates' ),
-				'{currency}'       => __( 'Currency code', 'leastudios-email-templates' ),
-				'{period_end}'     => __( 'Next billing date', 'leastudios-email-templates' ),
+				'{product_name}'   => [
+					'description' => __( 'Product name', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
+				'{invoice_amount}' => [
+					'description' => __( 'Invoice amount', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
+				'{currency}'       => [
+					'description' => __( 'Currency code', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
+				'{period_end}'     => [
+					'description' => __( 'Next billing date', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
 			],
-			self::PAYMENT_FAILED => [
-				'{product_name}'   => __( 'Product name', 'leastudios-email-templates' ),
-				'{invoice_amount}' => __( 'Invoice amount', 'leastudios-email-templates' ),
-				'{currency}'       => __( 'Currency code', 'leastudios-email-templates' ),
+			self::PAYMENT_FAILED       => [
+				'{product_name}'   => [
+					'description' => __( 'Product name', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
+				'{invoice_amount}' => [
+					'description' => __( 'Invoice amount', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
+				'{currency}'       => [
+					'description' => __( 'Currency code', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
 			],
-			self::REFUND_PROCESSED => [
-				'{refunded_amount}' => __( 'Refund amount', 'leastudios-email-templates' ),
-				'{amount}'          => __( 'Original payment amount', 'leastudios-email-templates' ),
-				'{currency}'        => __( 'Currency code', 'leastudios-email-templates' ),
-				'{product_name}'    => __( 'Product name', 'leastudios-email-templates' ),
-				'{order_id}'        => __( 'Local order ID', 'leastudios-email-templates' ),
+			self::REFUND_PROCESSED     => [
+				'{refunded_amount}' => [
+					'description' => __( 'Refund amount', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
+				'{amount}'          => [
+					'description' => __( 'Original payment amount', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
+				'{currency}'        => [
+					'description' => __( 'Currency code', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
+				'{product_name}'    => [
+					'description' => __( 'Product name', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
+				'{order_id}'        => [
+					'description' => __( 'Local order ID', 'leastudios-email-templates' ),
+					'escape'      => Escape_Mode::HTML,
+				],
 			],
 		};
 
 		return array_merge( $common, $specific );
+	}
+
+	/**
+	 * Return a map of unbraced-tag-name => Escape_Mode, suitable for passing
+	 * to Merge_Tag_Replacer::replace_html() as its $escape_map argument.
+	 *
+	 * @return array<string, Escape_Mode>
+	 */
+	public function escape_map(): array {
+		$map = [];
+		foreach ( $this->available_tags() as $tag => $meta ) {
+			$map[ trim( $tag, '{}' ) ] = $meta['escape'];
+		}
+		return $map;
 	}
 
 	/**
