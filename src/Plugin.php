@@ -91,7 +91,7 @@ final class Plugin {
 
 		// Admin settings.
 		if ( is_admin() ) {
-			$settings = new Settings_Page();
+			$settings = new Settings_Page( $registry );
 			$settings->init();
 
 			$log_page = new Email_Log_Page( $log_repo );

@@ -13,9 +13,9 @@ namespace LEAStudios\EmailTemplates\Admin;
 defined( 'ABSPATH' ) || exit;
 
 use LEAStudios\EmailTemplates\Email\Email_Sender;
-use LEAStudios\EmailTemplates\Email\Email_Type;
+use LEAStudios\EmailTemplates\Email\Email_Type_Definition;
+use LEAStudios\EmailTemplates\Email\Email_Type_Registry;
 use LEAStudios\EmailTemplates\Email\Merge_Tag_Replacer;
-use LEAStudios\EmailTemplates\Email\Sample_Context;
 use LEAStudios\EmailTemplates\Email\Template_Wrapper;
 use LEAStudios\EmailTemplates\Email\Theme;
 use LEAStudios\EmailTemplates\Security\Nonce;
@@ -46,6 +46,15 @@ class Settings_Page {
 	 * @var string
 	 */
 	private string $hook_suffix = '';
+
+	/**
+	 * Constructor.
+	 *
+	 * @param Email_Type_Registry $registry The shared type registry.
+	 */
+	public function __construct(
+		private readonly Email_Type_Registry $registry,
+	) {}
 
 	/**
 	 * Register hooks.
@@ -137,17 +146,16 @@ class Settings_Page {
 	/**
 	 * Sanitize email type settings.
 	 *
-	 * @param array<string, mixed> $input Raw input keyed by Email_Type value.
+	 * @param array<string, mixed> $input Raw input keyed by Email_Type_Definition id.
 	 * @return array<string, array{enabled: bool, subject: string, body: string, recipient_override: string}> Sanitized values.
 	 */
 	public function sanitize_emails( array $input ): array {
 		$sanitized = [];
 
-		foreach ( Email_Type::cases() as $type ) {
-			$key  = $type->value;
-			$data = $input[ $key ] ?? [];
+		foreach ( $this->registry->all() as $type_id => $_definition ) {
+			$data = $input[ $type_id ] ?? [];
 
-			$sanitized[ $key ] = [
+			$sanitized[ $type_id ] = [
 				'enabled'            => ! empty( $data['enabled'] ),
 				'subject'            => sanitize_text_field( $data['subject'] ?? '' ),
 				'body'               => wp_kses_post( $data['body'] ?? '' ),
@@ -373,9 +381,9 @@ class Settings_Page {
 		<form action="options.php" method="post">
 			<?php settings_fields( 'leastudios_email_templates_emails_group' ); ?>
 
-			<?php foreach ( Email_Type::cases() as $type ) : ?>
+			<?php foreach ( $this->registry->all() as $type ) : ?>
 				<?php
-				$key      = $type->value;
+				$key      = $type->id();
 				$settings = $email_settings[ $key ] ?? [];
 				$enabled  = $settings['enabled'] ?? true;
 				$subject  = $settings['subject'] ?? '';
@@ -503,7 +511,7 @@ class Settings_Page {
 	}
 
 	/**
-	 * AJAX handler: render a specific Email_Type with sample (or user-supplied)
+	 * AJAX handler: render a specific email type with sample (or user-supplied)
 	 * subject/body and wrap it in the branded template.
 	 *
 	 * Accepts optional `subject` and `body` POST fields so the admin can
@@ -518,15 +526,15 @@ class Settings_Page {
 			wp_send_json_error( __( 'Permission denied.', 'leastudios-email-templates' ) );
 		}
 
-		$type = $this->resolve_posted_type();
+		$definition = $this->resolve_posted_definition();
 
-		if ( null === $type ) {
+		if ( null === $definition ) {
 			wp_send_json_error( __( 'Unknown email type.', 'leastudios-email-templates' ) );
 		}
 
 		$replacer = new Merge_Tag_Replacer();
 		$wrapper  = new Template_Wrapper( $replacer );
-		$sample   = Sample_Context::for_type( $type );
+		$sample   = $definition->sample_context();
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce is checked above via Nonce::check_ajax.
 		$subject_tpl = isset( $_POST['subject'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['subject'] ) ) : '';
@@ -534,14 +542,14 @@ class Settings_Page {
 		$body_tpl = isset( $_POST['body'] ) ? wp_kses_post( wp_unslash( (string) $_POST['body'] ) ) : '';
 
 		if ( '' === $subject_tpl ) {
-			$subject_tpl = $type->default_subject();
+			$subject_tpl = $definition->default_subject();
 		}
 		if ( '' === $body_tpl ) {
-			$body_tpl = $type->default_body();
+			$body_tpl = $definition->default_body();
 		}
 
 		$rendered_subject = $replacer->replace_subject( $subject_tpl, $sample );
-		$rendered_body    = $replacer->replace_html( $body_tpl, $sample, $type->escape_map() );
+		$rendered_body    = $replacer->replace_html( $body_tpl, $sample, $definition->escape_map() );
 
 		$html = $wrapper->wrap( $rendered_body );
 
@@ -555,8 +563,8 @@ class Settings_Page {
 
 	/**
 	 * AJAX handler: send a real sample email of the given type to a chosen
-	 * address. Uses Sample_Context so all merge tags resolve to recognisable
-	 * placeholder values.
+	 * address. Uses the definition's sample_context() so all merge tags
+	 * resolve to recognisable placeholder values.
 	 *
 	 * @return void
 	 */
@@ -567,9 +575,9 @@ class Settings_Page {
 			wp_send_json_error( __( 'Permission denied.', 'leastudios-email-templates' ) );
 		}
 
-		$type = $this->resolve_posted_type();
+		$definition = $this->resolve_posted_definition();
 
-		if ( null === $type ) {
+		if ( null === $definition ) {
 			wp_send_json_error( __( 'Unknown email type.', 'leastudios-email-templates' ) );
 		}
 
@@ -580,8 +588,8 @@ class Settings_Page {
 			wp_send_json_error( __( 'A valid email address is required.', 'leastudios-email-templates' ) );
 		}
 
-		$sender = new Email_Sender( new Merge_Tag_Replacer() );
-		$result = $sender->send( $type, $to, Sample_Context::for_type( $type ) );
+		$sender = new Email_Sender( new Merge_Tag_Replacer(), $this->registry );
+		$result = $sender->send( $definition->id(), $to, $definition->sample_context() );
 
 		if ( ! $result ) {
 			wp_send_json_error(
@@ -623,20 +631,14 @@ class Settings_Page {
 	}
 
 	/**
-	 * Map a POSTed `type` key to its Email_Type case.
+	 * Map a POSTed `type` key to its registered Email_Type_Definition.
 	 *
-	 * @return Email_Type|null
+	 * @return Email_Type_Definition|null
 	 */
-	private function resolve_posted_type(): ?Email_Type {
+	private function resolve_posted_definition(): ?Email_Type_Definition {
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Callers verify the nonce before invoking this helper.
 		$raw = isset( $_POST['type'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['type'] ) ) : '';
 
-		foreach ( Email_Type::cases() as $case ) {
-			if ( $case->value === $raw ) {
-				return $case;
-			}
-		}
-
-		return null;
+		return $this->registry->get( $raw );
 	}
 }
