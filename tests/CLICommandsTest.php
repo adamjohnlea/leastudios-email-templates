@@ -98,4 +98,37 @@ class CLICommandsTest extends TestCase {
 		$this->assertSame( 'third-party', $rows[0]['source'] );
 		$this->assertSame( 'my_custom_type', $rows[0]['id'] );
 	}
+
+	public function test_render_preview_returns_subject_and_wrapped_html(): void {
+		$output = $this->commands->render_preview( 'payment_receipt', null, false );
+
+		$this->assertArrayHasKey( 'subject', $output );
+		$this->assertArrayHasKey( 'body', $output );
+		$this->assertNotSame( '', $output['subject'] );
+		$this->assertStringContainsString( '<', $output['body'] );
+	}
+
+	public function test_render_preview_applies_context_override(): void {
+		$output = $this->commands->render_preview(
+			'payment_receipt',
+			[ 'customer_name' => 'Ada Lovelace' ],
+			false
+		);
+
+		$this->assertStringContainsString( 'Ada Lovelace', $output['body'] );
+	}
+
+	public function test_render_preview_with_subject_only_returns_empty_body(): void {
+		$output = $this->commands->render_preview( 'payment_receipt', null, true );
+
+		$this->assertNotSame( '', $output['subject'] );
+		$this->assertSame( '', $output['body'] );
+	}
+
+	public function test_render_preview_throws_on_unknown_type(): void {
+		$this->expectException( \RuntimeException::class );
+		$this->expectExceptionMessageMatches( '/Unknown email type/' );
+
+		$this->commands->render_preview( 'nope_does_not_exist', null, false );
+	}
 }
