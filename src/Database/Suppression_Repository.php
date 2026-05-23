@@ -146,6 +146,22 @@ class Suppression_Repository {
 	}
 
 	/**
+	 * Look up a single row by id.
+	 *
+	 * @param int $id Row id.
+	 * @return Suppression_Entry|null
+	 */
+	public function find_by_id( int $id ): ?Suppression_Entry {
+		global $wpdb;
+		$table = $this->table_name();
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id ) );
+
+		return $row instanceof \stdClass ? Suppression_Entry::from_row( $row ) : null;
+	}
+
+	/**
 	 * Paginated list, newest first.
 	 *
 	 * @param array{email?:string} $filters  Filter set.

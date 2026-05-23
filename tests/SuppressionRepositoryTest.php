@@ -107,6 +107,18 @@ class SuppressionRepositoryTest extends TestCase {
 		$this->repo->install();
 	}
 
+	public function test_find_by_id_returns_entry_or_null(): void {
+		$this->repo->upsert( 'jane@example.com', 'link' );
+		$page = $this->repo->paginate( [], 50, 1 );
+		$id   = $page['rows'][0]->id;
+
+		$entry = $this->repo->find_by_id( $id );
+		$this->assertNotNull( $entry );
+		$this->assertSame( 'jane@example.com', $entry->email );
+
+		$this->assertNull( $this->repo->find_by_id( 99999 ) );
+	}
+
 	public function test_paginate_filters_by_email_substring_with_esc_like(): void {
 		$this->repo->upsert( 'alice@example.com', 'link' );
 		$this->repo->upsert( 'bob@example.com', 'link' );

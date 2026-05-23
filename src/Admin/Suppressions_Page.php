@@ -45,6 +45,7 @@ final class Suppressions_Page {
 		add_action( 'admin_menu', [ $this, 'register_menu' ] );
 		add_action( 'admin_post_leastudios_email_templates_add_suppression', [ $this, 'handle_add' ] );
 		add_action( 'admin_post_leastudios_email_templates_remove_suppression', [ $this, 'handle_remove' ] );
+		add_action( 'admin_post_leastudios_email_templates_bulk_suppressions', [ $this, 'handle_bulk' ] );
 	}
 
 	/**
@@ -99,11 +100,15 @@ final class Suppressions_Page {
 			</form>
 
 			<h2 class="title"><?php esc_html_e( 'Suppressed addresses', 'leastudios-email-templates' ); ?></h2>
-			<form method="GET">
+			<form method="POST" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<input type="hidden" name="action" value="leastudios_email_templates_bulk_suppressions">
 				<input type="hidden" name="page" value="leastudios-email-templates-suppressions">
-				<?php $this->list_table->search_box( __( 'Search', 'leastudios-email-templates' ), 'suppression-search' ); ?>
+				<?php
+				wp_nonce_field( 'bulk-suppressions' );
+				$this->list_table->search_box( __( 'Search', 'leastudios-email-templates' ), 'suppression-search' );
+				$this->list_table->display();
+				?>
 			</form>
-			<?php $this->list_table->display(); ?>
 		</div>
 		<?php
 	}
@@ -155,18 +160,94 @@ final class Suppressions_Page {
 	}
 
 	/**
+	 * Handle the bulk-action submission from the suppressions list table.
+	 *
+	 * The list table emits a `bulk-suppressions` nonce via display_tablenav();
+	 * we honor it for the bulk submit. Capability check is required even
+	 * after nonce verification (defense in depth — nonces don't authorize).
+	 *
+	 * @return void
+	 */
+	public function handle_bulk(): void {
+		check_admin_referer( 'bulk-suppressions' );
+
+		if ( ! current_user_can( self::CAPABILITY ) ) {
+			wp_die( esc_html__( 'You do not have permission to perform this action.', 'leastudios-email-templates' ) );
+		}
+
+		$action           = isset( $_POST['action'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['action'] ) ) : '';
+		$action_secondary = isset( $_POST['action2'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['action2'] ) ) : '';
+
+		// The bulk-action <select> is duplicated above and below the table.
+		// The one that wasn't "-1" wins.
+		$bulk_action = ( '' !== $action && '-1' !== $action ) ? $action : $action_secondary;
+
+		// We currently dispatch the bulk handler from a hidden 'action'
+		// input that names the admin-post hook. So $bulk_action above will
+		// either be our hook name (when "Apply" wasn't clicked) or the
+		// bulk-table dropdown value. Normalize: only act when the bulk
+		// value resolves to 'remove'.
+		if ( 'remove' !== $bulk_action ) {
+			wp_safe_redirect( $this->redirect_url( '' ) );
+			exit;
+		}
+
+		$ids = isset( $_POST['suppression'] ) && is_array( $_POST['suppression'] )
+			? array_filter( array_map( 'absint', (array) wp_unslash( $_POST['suppression'] ) ) )
+			: [];
+
+		if ( empty( $ids ) ) {
+			wp_safe_redirect( $this->redirect_url( '' ) );
+			exit;
+		}
+
+		// We have ids but the manager wants emails — fetch each row.
+		$repo = $this->list_table_repo();
+		foreach ( $ids as $id ) {
+			$entry = $repo ? $repo->find_by_id( $id ) : null;
+			if ( null !== $entry ) {
+				$this->manager->unsuppress( $entry->email );
+			}
+		}
+
+		wp_safe_redirect( $this->redirect_url( 'removed' ) );
+		exit;
+	}
+
+	/**
+	 * Reach into the list table to borrow its injected repository.
+	 *
+	 * Suppressions_Page itself only receives the Unsubscribe_Manager — the
+	 * repository sits behind the list table. We don't have a clean accessor,
+	 * so this helper exists for the bulk path and is the one place where
+	 * the indirection bites.
+	 *
+	 * @return \LEAStudios\EmailTemplates\Database\Suppression_Repository|null
+	 */
+	private function list_table_repo(): ?\LEAStudios\EmailTemplates\Database\Suppression_Repository {
+		// Reflection avoids exposing the repo property publicly on the list table.
+		$ref = new \ReflectionObject( $this->list_table );
+		if ( ! $ref->hasProperty( 'repo' ) ) {
+			return null;
+		}
+		$prop = $ref->getProperty( 'repo' );
+		$prop->setAccessible( true );
+		$repo = $prop->getValue( $this->list_table );
+
+		return $repo instanceof \LEAStudios\EmailTemplates\Database\Suppression_Repository ? $repo : null;
+	}
+
+	/**
 	 * Build the page URL with a notice query var.
 	 *
 	 * @param string $notice Notice slug.
 	 * @return string
 	 */
 	private function redirect_url( string $notice ): string {
-		return add_query_arg(
-			[
-				'page'   => 'leastudios-email-templates-suppressions',
-				'notice' => $notice,
-			],
-			admin_url( 'admin.php' )
-		);
+		$args = [ 'page' => 'leastudios-email-templates-suppressions' ];
+		if ( '' !== $notice ) {
+			$args['notice'] = $notice;
+		}
+		return add_query_arg( $args, admin_url( 'admin.php' ) );
 	}
 }
