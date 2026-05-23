@@ -102,6 +102,12 @@ The shared scaffold, packaging script, and project-wide development conventions 
 
 ## Changelog
 
+### 1.1.1 — 2026-05-23
+
+- Fixed: fatal error on the Email Templates → Suppressions admin page (`Call to undefined function convert_to_screen()`). The list table is now built lazily inside the page-render flow instead of at `plugins_loaded`, where `wp-admin/includes/template.php` has not yet been loaded.
+- Docs: corrected the `Email_Sender::compose()` docblock — the recipient IS reflected in the composed body via the `{unsubscribe_url}` merge tag added in 1.1.0.
+- Docs: `Email_Sender::send()` now documents that the per-type `recipient_override` setting silently supersedes the caller-supplied `$to` for delivery, the suppression gate, the `{unsubscribe_url}` merge tag, and the auto-appended footer.
+
 ### 1.1.0 — 2026-05-23
 
 - Added: per-type preview + send-test from the admin Email Types tab.

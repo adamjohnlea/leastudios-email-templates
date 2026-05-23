@@ -4,7 +4,7 @@ Tags: email templates, branded emails, payment emails, transactional emails, uns
 Requires at least: 6.4
 Tested up to: 6.9
 Requires PHP: 8.2
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,12 @@ Hook `leastudios_email_templates_register_types` at file scope (before `plugins_
 
 == Changelog ==
 
+= 1.1.1 — 2026-05-23 =
+
+* Fixed: fatal error on the Email Templates → Suppressions admin page (`Call to undefined function convert_to_screen()`). The list table is now built lazily inside the page-render flow instead of at `plugins_loaded`, where `wp-admin/includes/template.php` has not yet been loaded.
+* Docs: corrected the `Email_Sender::compose()` docblock — the recipient IS reflected in the composed body via the `{unsubscribe_url}` merge tag added in 1.1.0.
+* Docs: `Email_Sender::send()` now documents that the per-type `recipient_override` setting silently supersedes the caller-supplied `$to` for delivery, the suppression gate, the `{unsubscribe_url}` merge tag, and the auto-appended footer.
+
 = 1.1.0 — 2026-05-23 =
 
 * Added: per-type preview + send-test from the admin Email Types tab
@@ -78,6 +84,9 @@ Hook `leastudios_email_templates_register_types` at file scope (before `plugins_
 * Transactional emails for leaStudios Payments order, subscription, payment-failure, and refund events
 
 == Upgrade Notice ==
+
+= 1.1.1 =
+Fixes a fatal error on the Email Templates → Suppressions admin page introduced in 1.1.0. Recommended upgrade for anyone running 1.1.0.
 
 = 1.1.0 =
 Adds a suppression / unsubscribe gate: non-required transactional types (e.g., subscription_created) now skip recipients who have opted out via the auto-appended footer link. Required types (receipts, refunds, payment-failure, renewal receipts) bypass the gate. Review the new Email Templates → Suppressions admin page after upgrade.
