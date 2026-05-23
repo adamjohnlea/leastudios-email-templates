@@ -138,6 +138,7 @@ class Template_Wrapper {
 		$footer_text   = $branding['footer_text'] ?? '';
 		$social_links  = $branding['social_links'] ?? [];
 		$site_name     = get_option( 'blogname', '' );
+		$theme         = Theme::from_id( (string) ( $branding['theme'] ?? Theme::DEFAULT_ID ) );
 
 		// Process merge tags in footer text. Footer is HTML-rendered.
 		$footer_text = $this->replacer->replace_html( $footer_text );
@@ -167,6 +168,8 @@ class Template_Wrapper {
 				'footer_text'   => $footer_text,
 				'social_links'  => $social_links,
 				'site_name'     => $site_name,
+				'colors'        => $theme->colors,
+				'prefers_dark'  => $theme->supports_prefers_dark_override,
 			]
 		);
 		include $template_path;

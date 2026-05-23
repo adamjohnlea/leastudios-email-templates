@@ -150,4 +150,43 @@ class TemplateWrapperTest extends TestCase {
 
 		$this->assertSame( '', $result['body_html'] );
 	}
+
+	public function test_default_theme_renders_light_palette(): void {
+		update_option(
+			'leastudios_email_templates_branding',
+			[
+				'enabled'       => true,
+				'logo_url'      => '',
+				'primary_color' => '#4f46e5',
+				'footer_text'   => '',
+				'social_links'  => [],
+			]
+		);
+
+		$result = $this->wrapper->wrap( '<p>Body</p>' );
+
+		$this->assertStringContainsString( '#f4f4f7', $result, 'outer_bg light token missing' );
+		$this->assertStringContainsString( '#ffffff', $result, 'card_bg light token missing' );
+		$this->assertStringContainsString( 'prefers-color-scheme: dark', $result, 'light theme should emit prefers-dark override' );
+	}
+
+	public function test_dark_theme_renders_dark_palette(): void {
+		update_option(
+			'leastudios_email_templates_branding',
+			[
+				'enabled'       => true,
+				'logo_url'      => '',
+				'primary_color' => '#4f46e5',
+				'footer_text'   => '',
+				'social_links'  => [],
+				'theme'         => 'modern-dark',
+			]
+		);
+
+		$result = $this->wrapper->wrap( '<p>Body</p>' );
+
+		$this->assertStringContainsString( '#0f172a', $result, 'outer_bg dark token missing' );
+		$this->assertStringContainsString( '#1e293b', $result, 'card_bg dark token missing' );
+		$this->assertStringNotContainsString( 'prefers-color-scheme: dark', $result, 'dark theme should NOT emit prefers-dark override' );
+	}
 }
