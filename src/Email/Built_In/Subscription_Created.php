@@ -126,11 +126,18 @@ final class Subscription_Created extends Abstract_Email_Type {
 	}
 
 	/**
-	 * Subscription confirmations must always be sent.
+	 * Subscription-created emails are lifecycle-flavored, not receipts. The
+	 * initial-payment receipt for a new subscription is covered by
+	 * payment_receipt; subscription_created is the "welcome / your
+	 * subscription is active" notification.
+	 *
+	 * Demoted to non-required in Phase 9 so suppressed recipients can opt out
+	 * of this notification while still receiving payment_receipt,
+	 * subscription_renewed, refund_processed, and payment_failed.
 	 *
 	 * @return bool
 	 */
 	public function is_transactional_required(): bool {
-		return true;
+		return false;
 	}
 }

@@ -97,12 +97,26 @@ class BuiltInTypesTest extends TestCase {
 	}
 
 	/**
-	 * @dataProvider built_in_provider
-	 *
-	 * @param Email_Type_Definition $type The email type definition.
+	 * @return array<string, array{0: Email_Type_Definition, 1: bool}>
 	 */
-	public function test_is_transactional_required_returns_true( Email_Type_Definition $type ): void {
-		$this->assertTrue( $type->is_transactional_required(), $type->id() . ' must be transactional-required' );
+	public function transactional_required_provider(): array {
+		return [
+			'payment_receipt is required'          => [ new Payment_Receipt(), true ],
+			'payment_failed is required'           => [ new Payment_Failed(), true ],
+			'refund_processed is required'         => [ new Refund_Processed(), true ],
+			'subscription_renewed is required'     => [ new Subscription_Renewed(), true ],
+			'subscription_created is NOT required' => [ new Subscription_Created(), false ],
+		];
+	}
+
+	/**
+	 * @dataProvider transactional_required_provider
+	 *
+	 * @param Email_Type_Definition $type     The email type definition.
+	 * @param bool                  $expected Expected return value.
+	 */
+	public function test_is_transactional_required_matches_expectation( Email_Type_Definition $type, bool $expected ): void {
+		$this->assertSame( $expected, $type->is_transactional_required(), $type->id() );
 	}
 
 	/**
