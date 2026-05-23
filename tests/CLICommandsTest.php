@@ -213,6 +213,35 @@ class CLICommandsTest extends TestCase {
 		$this->commands->dispatch_send_test( 'nope_does_not_exist', 'support@example.test', false );
 	}
 
+	public function test_dispatch_send_test_warns_when_recipient_is_suppressed_for_non_required_type(): void {
+		// Subscription_Created is not transactional-required, so the suppression
+		// gate in Email_Sender::send() will fire and return false. The CLI must
+		// surface this as a warning (exit 0), not the misleading "wp_mail returned
+		// false" error.
+		$this->manager->suppress( 'jane@example.com', 'cli' );
+
+		$result = $this->commands->dispatch_send_test( 'subscription_created', 'jane@example.com', false );
+
+		$this->assertFalse( $result['sent'] );
+		$this->assertTrue( $result['suppressed'] );
+		$this->assertCount( 1, \WP_CLI::$warning_calls );
+		$this->assertStringContainsString( 'jane@example.com', \WP_CLI::$warning_calls[0] );
+		$this->assertStringContainsString( 'suppressed', \WP_CLI::$warning_calls[0] );
+		$this->assertStringContainsString( 'subscription_created', \WP_CLI::$warning_calls[0] );
+		$this->assertSame( [], \WP_CLI::$error_calls );
+	}
+
+	public function test_dispatch_send_test_does_not_warn_for_required_type_even_when_recipient_suppressed(): void {
+		// Payment_Receipt is transactional-required: the suppression gate must
+		// not fire, so the send proceeds and 'suppressed' stays false.
+		$this->manager->suppress( 'jane@example.com', 'cli' );
+
+		$result = $this->commands->dispatch_send_test( 'payment_receipt', 'jane@example.com', false );
+
+		$this->assertFalse( $result['suppressed'] );
+		$this->assertSame( [], \WP_CLI::$warning_calls );
+	}
+
 	public function test_dispatch_add_suppression_rejects_garbage_email(): void {
 		$this->expectException( \RuntimeException::class );
 		$this->expectExceptionMessageMatches( '/not a valid email/i' );

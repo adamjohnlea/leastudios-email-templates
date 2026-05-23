@@ -261,9 +261,16 @@ class Commands {
 
 		if ( $result['sent'] ) {
 			\WP_CLI::success( sprintf( 'Sent %s to %s (logged as source=cli-test).', $type_id, $email ) );
-		} else {
-			\WP_CLI::error( sprintf( 'wp_mail returned false for type "%s" to %s. Check that the type is enabled and that mail is configured.', $type_id, $email ) );
+			return;
 		}
+
+		// dispatch_send_test already emitted the suppression warning; don't
+		// also surface the misleading "wp_mail returned false" error.
+		if ( $result['suppressed'] ) {
+			return;
+		}
+
+		\WP_CLI::error( sprintf( 'wp_mail returned false for type "%s" to %s. Check that the type is enabled and that mail is configured.', $type_id, $email ) );
 	}
 
 	/**
@@ -273,16 +280,17 @@ class Commands {
 	 * @param string $type_id Registered email type id.
 	 * @param string $email   Recipient address.
 	 * @param bool   $dry_run When true, no wp_mail is dispatched and no row is logged.
-	 * @return array{sent:bool, subject:string, body:string}
+	 * @return array{sent:bool, suppressed:bool, subject:string, body:string}
 	 */
 	public function dispatch_send_test( string $type_id, string $email, bool $dry_run ): array {
 		if ( null === $this->registry->get( $type_id ) ) {
 			\WP_CLI::error( sprintf( 'Unknown email type: %s', $type_id ) );
 			// WP_CLI::error throws in tests via the stub; in production it exits.
 			return [
-				'sent'    => false,
-				'subject' => '',
-				'body'    => '',
+				'sent'       => false,
+				'suppressed' => false,
+				'subject'    => '',
+				'body'       => '',
 			];
 		}
 
@@ -290,9 +298,10 @@ class Commands {
 			\WP_CLI::error( sprintf( '"%s" is not a valid email address.', $email ) );
 			// WP_CLI::error throws in tests via the stub; in production it exits.
 			return [
-				'sent'    => false,
-				'subject' => '',
-				'body'    => '',
+				'sent'       => false,
+				'suppressed' => false,
+				'subject'    => '',
+				'body'       => '',
 			];
 		}
 
@@ -305,25 +314,41 @@ class Commands {
 				\WP_CLI::error( sprintf( 'Email type "%s" is disabled in settings (Email Types tab in wp-admin).', $type_id ) );
 				// WP_CLI::error throws in tests via the stub; in production it exits.
 				return [
-					'sent'    => false,
-					'subject' => '',
-					'body'    => '',
+					'sent'       => false,
+					'suppressed' => false,
+					'subject'    => '',
+					'body'       => '',
 				];
 			}
 
 			return [
-				'sent'    => false,
-				'subject' => $composed['subject'],
-				'body'    => $composed['body'],
+				'sent'       => false,
+				'suppressed' => false,
+				'subject'    => $composed['subject'],
+				'body'       => $composed['body'],
 			];
 		}
 
 		$sent = $this->sender->send( $type_id, $email, $context, 'cli-test' );
 
+		// Distinguish a suppression-gated send (Email_Sender::send returns
+		// false but writes a status=suppressed log row) from a genuine
+		// wp_mail failure. Required types bypass the gate, so checking
+		// is_transactional_required() avoids a stray warning if a row was
+		// added between gate-check and send.
+		$suppressed = ! $sent
+			&& ! $definition->is_transactional_required()
+			&& $this->manager->is_suppressed( $email );
+
+		if ( $suppressed ) {
+			\WP_CLI::warning( sprintf( '%s is suppressed; %s was not sent. Log row written with status=suppressed.', $email, $type_id ) );
+		}
+
 		return [
-			'sent'    => $sent,
-			'subject' => '',
-			'body'    => '',
+			'sent'       => $sent,
+			'suppressed' => $suppressed,
+			'subject'    => '',
+			'body'       => '',
 		];
 	}
 
