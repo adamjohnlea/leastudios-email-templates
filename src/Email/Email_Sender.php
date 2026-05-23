@@ -167,9 +167,12 @@ class Email_Sender {
 		// Phase 9 — inject the recipient-aware near-global tag. Required types
 		// and empty recipients get an empty string; the filter lets sites
 		// rewrite the URL (e.g., route through a CDN).
+		// Our recipient-aware resolution always wins over caller-supplied
+		// $context values. The documented override surface is the
+		// leastudios_email_templates_unsubscribe_url filter, not $context.
 		$context = array_merge(
-			[ 'unsubscribe_url' => $this->resolve_unsubscribe_url( $to, $definition ) ],
-			$context
+			$context,
+			[ 'unsubscribe_url' => $this->resolve_unsubscribe_url( $to, $definition ) ]
 		);
 
 		$subject = '' !== $settings['subject'] ? $settings['subject'] : $definition->default_subject();

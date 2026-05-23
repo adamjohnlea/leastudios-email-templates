@@ -505,6 +505,30 @@ class EmailSenderTest extends TestCase {
 		);
 	}
 
+	public function test_resolved_unsubscribe_url_wins_over_caller_supplied_context(): void {
+		$this->register_phase9_fixture();
+
+		$composed = $this->sender->compose(
+			'phase9_fixture',
+			[ 'unsubscribe_url' => 'https://attacker.example/evil' ],
+			'jane@example.com'
+		);
+
+		$this->assertNotNull( $composed );
+		$this->assertStringNotContainsString(
+			'attacker.example',
+			(string) $composed['body'],
+			'caller-supplied unsubscribe_url must not override our resolved value'
+		);
+		// Accept either pretty-permalink (/wp-json/...) or default rest_route= form.
+		$pretty = '/wp-json/leastudios-email-templates/v1/unsubscribe';
+		$ugly   = 'leastudios-email-templates%2Fv1%2Funsubscribe';
+		$this->assertTrue(
+			str_contains( (string) $composed['body'], $pretty ) || str_contains( (string) $composed['body'], $ugly ),
+			'our recipient-aware resolution must win'
+		);
+	}
+
 	public function test_unsubscribe_footer_html_filter_applied(): void {
 		add_filter(
 			'leastudios_email_templates_unsubscribe_footer_html',
