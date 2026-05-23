@@ -12,11 +12,15 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 
 delete_option( 'leastudios_email_templates_branding' );
 delete_option( 'leastudios_email_templates_emails' );
+delete_option( 'leastudios_email_templates_unsubscribe_secret' );
 
-// Drop the email log table if the autoloader is reachable.
+// Drop custom tables if the autoloader is reachable.
+// Suppression_Repository::drop() also deletes its schema-version option,
+// matching Email_Log_Repository's behavior.
 if ( file_exists( __DIR__ . '/vendor/autoload.php' ) ) {
 	require_once __DIR__ . '/vendor/autoload.php';
 	( new \LEAStudios\EmailTemplates\Database\Email_Log_Repository() )->drop();
+	( new \LEAStudios\EmailTemplates\Database\Suppression_Repository() )->drop();
 }
 
 // Unschedule the prune cron in case deactivation didn't run.
