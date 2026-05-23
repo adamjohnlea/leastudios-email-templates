@@ -38,7 +38,7 @@ class Send_Logger {
 	 * @return void
 	 */
 	public function init(): void {
-		add_action( 'leastudios_email_templates_email_sent', [ $this, 'record' ], 10, 6 );
+		add_action( 'leastudios_email_templates_email_sent', [ $this, 'record' ], 10, 7 );
 	}
 
 	/**
@@ -50,9 +50,10 @@ class Send_Logger {
 	 * @param bool               $result  Whether wp_mail returned true.
 	 * @param string             $body    The rendered body that was sent.
 	 * @param array<int, string> $headers Headers that were sent.
+	 * @param string             $source  Send-origin marker: 'web' or 'cli-test'.
 	 * @return void
 	 */
-	public function record( string $type_id, string $to, string $subject, bool $result, string $body = '', array $headers = [] ): void {
+	public function record( string $type_id, string $to, string $subject, bool $result, string $body = '', array $headers = [], string $source = 'web' ): void {
 		$this->repo->create(
 			[
 				'type'      => $type_id,
@@ -62,6 +63,7 @@ class Send_Logger {
 				'headers'   => implode( "\n", $headers ),
 				'status'    => $result ? 'sent' : 'failed',
 				'error'     => null,
+				'source'    => $source,
 			]
 		);
 	}

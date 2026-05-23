@@ -68,4 +68,45 @@ class SendLoggerTest extends TestCase {
 			has_action( 'leastudios_email_templates_email_sent', [ $this->logger, 'record' ] )
 		);
 	}
+
+	public function test_record_persists_source_to_log_row(): void {
+		$this->logger->record(
+			'payment_receipt',
+			'buyer@example.com',
+			'Receipt',
+			true,
+			'<p>Body</p>',
+			[ 'Content-Type: text/html' ],
+			'cli-test'
+		);
+
+		$page = $this->repo->paginate( [], 10, 1 );
+		$this->assertCount( 1, $page['rows'] );
+		$this->assertSame( 'cli-test', $page['rows'][0]->source );
+	}
+
+	public function test_record_defaults_source_to_web(): void {
+		$this->logger->record(
+			'payment_receipt',
+			'buyer@example.com',
+			'Receipt',
+			true,
+			'<p>Body</p>',
+			[ 'Content-Type: text/html' ]
+		);
+
+		$page = $this->repo->paginate( [], 10, 1 );
+		$this->assertSame( 'web', $page['rows'][0]->source );
+	}
+
+	public function test_init_registers_subscriber_with_seven_accepted_args(): void {
+		$this->logger->init();
+
+		global $wp_filter;
+		$callbacks = $wp_filter['leastudios_email_templates_email_sent']->callbacks[10] ?? [];
+		$this->assertNotEmpty( $callbacks );
+
+		$first = array_values( $callbacks )[0];
+		$this->assertSame( 7, $first['accepted_args'] );
+	}
 }
