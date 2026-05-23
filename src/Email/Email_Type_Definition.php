@@ -66,6 +66,12 @@ interface Email_Type_Definition {
 	 * runtime `$context` keys). Built-ins derive this from `available_tags()`
 	 * via the projection in Abstract_Email_Type.
 	 *
+	 * Contract: the returned map must include an entry for every tag
+	 * returned by `available_tags()` (using the unbraced key). Missing
+	 * entries cause `Merge_Tag_Replacer::replace_html()` to fall back to
+	 * the default HTML-escape mode, so an under-populated map is a safety
+	 * gap rather than an obvious failure.
+	 *
 	 * @return array<string, Escape_Mode>
 	 */
 	public function escape_map(): array;

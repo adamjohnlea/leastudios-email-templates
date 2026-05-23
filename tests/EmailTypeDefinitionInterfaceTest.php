@@ -13,7 +13,7 @@ use LEAStudios\EmailTemplates\Email\Email_Type_Definition;
 use LEAStudios\Tests\TestCase;
 
 /**
- * @covers \LEAStudios\EmailTemplates\Email\Email_Type_Definition
+ * @coversNothing
  */
 class EmailTypeDefinitionInterfaceTest extends TestCase {
 
