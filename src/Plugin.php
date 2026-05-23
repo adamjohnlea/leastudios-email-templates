@@ -25,6 +25,7 @@ use LEAStudios\EmailTemplates\Email\Email_Type_Registry;
 use LEAStudios\EmailTemplates\Email\Merge_Tag_Replacer;
 use LEAStudios\EmailTemplates\Email\Plain_Text_Injector;
 use LEAStudios\EmailTemplates\Email\Template_Wrapper;
+use LEAStudios\EmailTemplates\CLI\Commands;
 use LEAStudios\EmailTemplates\Log\Send_Logger;
 use LEAStudios\EmailTemplates\Payment\Payment_Data_Resolver;
 use LEAStudios\EmailTemplates\Payment\Payment_Email_Listener;
@@ -101,6 +102,16 @@ final class Plugin {
 
 		// Email sender for transactional emails.
 		$sender = new Email_Sender( $replacer, $registry );
+
+		// Register WP-CLI commands. Guarded so the class is only required when
+		// the CLI is actually running, keeping the autoload graph quiet for
+		// web requests.
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			\WP_CLI::add_command(
+				'leastudios-email-templates',
+				new Commands( $registry, $sender, $replacer )
+			);
+		}
 
 		// Payment integration (only when payments plugin is active).
 		if ( $this->is_payments_active() ) {
