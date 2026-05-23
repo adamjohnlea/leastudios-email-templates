@@ -94,7 +94,7 @@ final class Plugin {
 			$settings = new Settings_Page( $registry );
 			$settings->init();
 
-			$log_page = new Email_Log_Page( $log_repo );
+			$log_page = new Email_Log_Page( $log_repo, $registry );
 			$log_page->init();
 		}
 	}

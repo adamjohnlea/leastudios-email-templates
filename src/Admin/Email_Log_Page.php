@@ -13,6 +13,7 @@ namespace LEAStudios\EmailTemplates\Admin;
 defined( 'ABSPATH' ) || exit;
 
 use LEAStudios\EmailTemplates\Database\Email_Log_Repository;
+use LEAStudios\EmailTemplates\Email\Email_Type_Registry;
 
 /**
  * Registers the submenu, renders list + detail views, and handles resend.
@@ -25,9 +26,13 @@ class Email_Log_Page {
 	/**
 	 * Constructor.
 	 *
-	 * @param Email_Log_Repository $repo Repository.
+	 * @param Email_Log_Repository $repo     Repository.
+	 * @param Email_Type_Registry  $registry Email type registry.
 	 */
-	public function __construct( private readonly Email_Log_Repository $repo ) {}
+	public function __construct(
+		private readonly Email_Log_Repository $repo,
+		private readonly Email_Type_Registry $registry,
+	) {}
 
 	/**
 	 * Register hooks.
@@ -76,7 +81,7 @@ class Email_Log_Page {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only notice flag.
 		$resent = isset( $_GET['resent'] ) ? sanitize_text_field( wp_unslash( (string) $_GET['resent'] ) ) : '';
 
-		$table = new Email_Log_List_Table( $this->repo );
+		$table = new Email_Log_List_Table( $this->repo, $this->registry );
 		$table->prepare_items();
 
 		echo '<div class="wrap"><h1>' . esc_html__( 'Email Log', 'leastudios-email-templates' ) . '</h1>';

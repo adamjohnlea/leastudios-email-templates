@@ -18,7 +18,7 @@ if ( ! class_exists( 'WP_List_Table' ) ) {
 
 use LEAStudios\EmailTemplates\Database\Email_Log_Entry;
 use LEAStudios\EmailTemplates\Database\Email_Log_Repository;
-use LEAStudios\EmailTemplates\Email\Email_Type;
+use LEAStudios\EmailTemplates\Email\Email_Type_Registry;
 
 /**
  * Renders the log list with type/status filters and per-row View/Resend actions.
@@ -33,11 +33,19 @@ class Email_Log_List_Table extends \WP_List_Table {
 	private Email_Log_Repository $repo;
 
 	/**
+	 * Email type registry.
+	 *
+	 * @var Email_Type_Registry
+	 */
+	private Email_Type_Registry $registry;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Email_Log_Repository $repo Repository instance.
+	 * @param Email_Log_Repository $repo     Repository instance.
+	 * @param Email_Type_Registry  $registry Email type registry.
 	 */
-	public function __construct( Email_Log_Repository $repo ) {
+	public function __construct( Email_Log_Repository $repo, Email_Type_Registry $registry ) {
 		parent::__construct(
 			[
 				'singular' => 'log_entry',
@@ -45,7 +53,8 @@ class Email_Log_List_Table extends \WP_List_Table {
 				'ajax'     => false,
 			]
 		);
-		$this->repo = $repo;
+		$this->repo     = $repo;
+		$this->registry = $registry;
 	}
 
 	/**
@@ -168,8 +177,8 @@ class Email_Log_List_Table extends \WP_List_Table {
 		<div class="alignleft actions">
 			<select name="type">
 				<option value=""><?php esc_html_e( 'All types', 'leastudios-email-templates' ); ?></option>
-				<?php foreach ( Email_Type::cases() as $case ) : ?>
-					<option value="<?php echo esc_attr( $case->value ); ?>" <?php selected( $case->value, $type ); ?>>
+				<?php foreach ( $this->registry->all() as $case ) : ?>
+					<option value="<?php echo esc_attr( $case->id() ); ?>" <?php selected( $case->id(), $type ); ?>>
 						<?php echo esc_html( $case->label() ); ?>
 					</option>
 				<?php endforeach; ?>
