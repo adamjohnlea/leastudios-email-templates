@@ -113,13 +113,18 @@ final class Unsubscribe_Controller extends WP_REST_Controller {
 
 		$this->manager->suppress( $email, 'link' );
 
+		$branding  = (array) get_option( 'leastudios_email_templates_branding', [] );
+		$button_bg = (string) ( $branding['primary_color'] ?? '#4f46e5' );
+
 		return $this->html_response(
 			200,
 			$this->render_template(
 				'landing-unsubscribed.php',
 				[
-					'email' => $email,
-					'token' => $token,
+					'email'       => $email,
+					'token'       => $token,
+					'button_bg'   => $button_bg,
+					'button_text' => self::pick_button_text_color( $button_bg ),
 				]
 			)
 		);
@@ -200,6 +205,37 @@ final class Unsubscribe_Controller extends WP_REST_Controller {
 		$response->header( 'X-Robots-Tag', 'noindex, nofollow' );
 
 		return $response;
+	}
+
+	/**
+	 * Pick a readable text color for a brand-colored button background.
+	 *
+	 * Uses the YIQ-style luminance formula (0.299*R + 0.587*G + 0.114*B)
+	 * with a 186 threshold to switch between dark text (#111827) on light
+	 * backgrounds and white text (#ffffff) on dark backgrounds. This is the
+	 * conventional WCAG-derived cutoff and keeps the button readable for
+	 * any 6-digit hex an admin might set.
+	 *
+	 * Returns the safe default (#ffffff) for malformed input (empty, 3-char
+	 * shorthand, CSS keywords, non-hex characters). Three-char shorthand is
+	 * intentionally not supported — the branding option always stores
+	 * full 6-digit hex.
+	 *
+	 * @param string $hex The button background as a 6-digit hex (#RRGGBB).
+	 * @return string Either '#111827' (dark) or '#ffffff' (light).
+	 */
+	public static function pick_button_text_color( string $hex ): string {
+		if ( 1 !== preg_match( '/^#([0-9a-fA-F]{6})$/', $hex, $matches ) ) {
+			return '#ffffff';
+		}
+
+		$r = (int) hexdec( substr( $matches[1], 0, 2 ) );
+		$g = (int) hexdec( substr( $matches[1], 2, 2 ) );
+		$b = (int) hexdec( substr( $matches[1], 4, 2 ) );
+
+		$luminance = ( 0.299 * $r ) + ( 0.587 * $g ) + ( 0.114 * $b );
+
+		return $luminance > 186 ? '#111827' : '#ffffff';
 	}
 
 	/**

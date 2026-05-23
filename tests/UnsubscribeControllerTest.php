@@ -118,4 +118,25 @@ class UnsubscribeControllerTest extends TestCase {
 		$this->assertArrayHasKey( 'Cache-Control', $headers );
 		$this->assertStringContainsString( 'no-cache', (string) $headers['Cache-Control'] );
 	}
+
+	public function test_pick_button_text_color_returns_white_for_dark_backgrounds(): void {
+		$this->assertSame( '#ffffff', Unsubscribe_Controller::pick_button_text_color( '#000000' ) );
+		$this->assertSame( '#ffffff', Unsubscribe_Controller::pick_button_text_color( '#4f46e5' ) );
+		$this->assertSame( '#ffffff', Unsubscribe_Controller::pick_button_text_color( '#0000ff' ) );
+		$this->assertSame( '#ffffff', Unsubscribe_Controller::pick_button_text_color( '#1a1a1a' ) );
+	}
+
+	public function test_pick_button_text_color_returns_dark_for_light_backgrounds(): void {
+		$this->assertSame( '#111827', Unsubscribe_Controller::pick_button_text_color( '#ffffff' ) );
+		$this->assertSame( '#111827', Unsubscribe_Controller::pick_button_text_color( '#f0f0f0' ) );
+		$this->assertSame( '#111827', Unsubscribe_Controller::pick_button_text_color( '#ffff00' ) );
+		$this->assertSame( '#111827', Unsubscribe_Controller::pick_button_text_color( '#eaeaea' ) );
+	}
+
+	public function test_pick_button_text_color_defaults_white_for_invalid_input(): void {
+		$this->assertSame( '#ffffff', Unsubscribe_Controller::pick_button_text_color( '' ) );
+		$this->assertSame( '#ffffff', Unsubscribe_Controller::pick_button_text_color( '#fff' ) );        // 3-char shorthand not supported.
+		$this->assertSame( '#ffffff', Unsubscribe_Controller::pick_button_text_color( 'red' ) );        // CSS keyword.
+		$this->assertSame( '#ffffff', Unsubscribe_Controller::pick_button_text_color( '#xyz123' ) );    // Invalid hex.
+	}
 }

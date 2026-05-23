@@ -3,8 +3,10 @@
  * Landing page shown after one-click unsubscribe.
  *
  * Variables in scope:
- *   string $email Suppressed email (normalized).
- *   string $token Signed token (for the resubscribe form).
+ *   string $email       Suppressed email (normalized).
+ *   string $token       Signed token (for the resubscribe form).
+ *   string $button_bg   Resolved brand color for the resubscribe button (6-digit hex).
+ *   string $button_text Resolved text color for the button (#111827 or #ffffff).
  *
  * @package LEAStudios\EmailTemplates
  */
@@ -24,8 +26,8 @@ defined( 'ABSPATH' ) || exit;
 		h1 { font-size: 20px; margin: 0 0 12px; }
 		p { font-size: 14px; line-height: 1.5; color: #4b5563; margin: 0 0 16px; }
 		.email { font-weight: 600; color: #111827; }
-		button { font: inherit; cursor: pointer; background: #4f46e5; color: #fff; border: 0; border-radius: 6px; padding: 10px 16px; font-weight: 600; }
-		button:hover { background: #4338ca; }
+		button { font: inherit; cursor: pointer; background: <?php echo esc_attr( $button_bg ); ?>; color: <?php echo esc_attr( $button_text ); ?>; border: 0; border-radius: 6px; padding: 10px 16px; font-weight: 600; transition: opacity 0.15s ease; }
+		button:hover { opacity: 0.9; }
 		.muted { color: #6b7280; font-size: 12px; margin-top: 24px; }
 	</style>
 </head>
