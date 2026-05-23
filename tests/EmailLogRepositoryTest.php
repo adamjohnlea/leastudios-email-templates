@@ -72,6 +72,43 @@ class EmailLogRepositoryTest extends TestCase {
 		$this->assertCount( 1, $page['rows'] );
 	}
 
+	public function test_create_persists_source_column(): void {
+		$id = $this->repo->create(
+			[
+				'type'      => 'payment_receipt',
+				'recipient' => 'a@example.test',
+				'subject'   => 'Hi',
+				'body'      => '<p>Hi</p>',
+				'headers'   => 'Content-Type: text/html',
+				'status'    => 'sent',
+				'error'     => null,
+				'source'    => 'cli-test',
+			]
+		);
+
+		$entry = $this->repo->get( $id );
+		$this->assertNotNull( $entry );
+		$this->assertSame( 'cli-test', $entry->source );
+	}
+
+	public function test_create_defaults_source_to_web_when_omitted(): void {
+		$id = $this->repo->create(
+			[
+				'type'      => 'payment_receipt',
+				'recipient' => 'a@example.test',
+				'subject'   => 'Hi',
+				'body'      => '<p>Hi</p>',
+				'headers'   => '',
+				'status'    => 'sent',
+				'error'     => null,
+			]
+		);
+
+		$entry = $this->repo->get( $id );
+		$this->assertNotNull( $entry );
+		$this->assertSame( 'web', $entry->source );
+	}
+
 	public function test_prune_removes_rows_older_than_cutoff(): void {
 		global $wpdb;
 

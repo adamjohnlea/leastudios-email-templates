@@ -31,6 +31,7 @@ final class Email_Log_Entry {
 	 * @param string $status      'sent' | 'failed'.
 	 * @param string $error       Error string when failed; '' otherwise.
 	 * @param string $created_at  MySQL datetime in site timezone.
+	 * @param string $source      Send-origin marker: 'web' (default) or 'cli-test'.
 	 */
 	public function __construct(
 		public readonly int $id,
@@ -42,6 +43,7 @@ final class Email_Log_Entry {
 		public readonly string $status,
 		public readonly string $error,
 		public readonly string $created_at,
+		public readonly string $source = 'web',
 	) {}
 
 	/**
@@ -61,6 +63,7 @@ final class Email_Log_Entry {
 			(string) ( $row->status ?? '' ),
 			(string) ( $row->error ?? '' ),
 			(string) ( $row->created_at ?? '' ),
+			(string) ( $row->source ?? 'web' ),
 		);
 	}
 }

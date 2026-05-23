@@ -24,7 +24,7 @@ class Email_Log_Repository {
 	/**
 	 * Bumped when the schema changes so install() knows to re-run dbDelta.
 	 */
-	private const SCHEMA_VERSION = '1.0.0';
+	private const SCHEMA_VERSION = '1.1.0';
 
 	/**
 	 * Option key holding the installed schema version.
@@ -66,10 +66,12 @@ class Email_Log_Repository {
 			headers longtext NOT NULL,
 			status varchar(16) NOT NULL DEFAULT 'sent',
 			error text NULL,
+			source varchar(16) NOT NULL DEFAULT 'web',
 			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY  (id),
 			KEY type_idx (type),
 			KEY status_idx (status),
+			KEY source_idx (source),
 			KEY created_at_idx (created_at)
 		) {$charset_collate};";
 
@@ -81,7 +83,7 @@ class Email_Log_Repository {
 	/**
 	 * Insert one row.
 	 *
-	 * @param array{type:string,recipient:string,subject:string,body:string,headers:string,status:string,error:?string} $data Row data.
+	 * @param array{type:string,recipient:string,subject:string,body:string,headers:string,status:string,error:?string,source?:string} $data Row data.
 	 * @return int Inserted ID, or 0 on failure.
 	 */
 	public function create( array $data ): int {
@@ -98,9 +100,10 @@ class Email_Log_Repository {
 				'headers'    => $data['headers'],
 				'status'     => $data['status'],
 				'error'      => $data['error'],
+				'source'     => $data['source'] ?? 'web',
 				'created_at' => current_time( 'mysql' ),
 			],
-			[ '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' ]
+			[ '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' ]
 		);
 
 		return false === $ok ? 0 : (int) $wpdb->insert_id;
