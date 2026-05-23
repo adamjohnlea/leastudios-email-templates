@@ -45,7 +45,6 @@ final class Suppressions_Page {
 		add_action( 'admin_menu', [ $this, 'register_menu' ] );
 		add_action( 'admin_post_leastudios_email_templates_add_suppression', [ $this, 'handle_add' ] );
 		add_action( 'admin_post_leastudios_email_templates_remove_suppression', [ $this, 'handle_remove' ] );
-		add_action( 'admin_post_leastudios_email_templates_bulk_suppressions', [ $this, 'handle_bulk' ] );
 	}
 
 	/**
@@ -74,6 +73,8 @@ final class Suppressions_Page {
 			wp_die( esc_html__( 'You do not have permission to view this page.', 'leastudios-email-templates' ) );
 		}
 
+		$this->maybe_handle_bulk();
+
 		$this->list_table->prepare_items();
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only notice flag on a capability-gated page.
 		$notice = isset( $_GET['notice'] ) ? sanitize_text_field( wp_unslash( (string) $_GET['notice'] ) ) : '';
@@ -100,11 +101,8 @@ final class Suppressions_Page {
 			</form>
 
 			<h2 class="title"><?php esc_html_e( 'Suppressed addresses', 'leastudios-email-templates' ); ?></h2>
-			<form method="POST" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-				<input type="hidden" name="action" value="leastudios_email_templates_bulk_suppressions">
-				<input type="hidden" name="page" value="leastudios-email-templates-suppressions">
+			<form method="POST" action="<?php echo esc_url( admin_url( 'admin.php?page=leastudios-email-templates-suppressions' ) ); ?>">
 				<?php
-				wp_nonce_field( 'bulk-suppressions' );
 				$this->list_table->search_box( __( 'Search', 'leastudios-email-templates' ), 'suppression-search' );
 				$this->list_table->display();
 				?>
@@ -160,36 +158,26 @@ final class Suppressions_Page {
 	}
 
 	/**
-	 * Handle the bulk-action submission from the suppressions list table.
+	 * Process the bulk-action POST from the list-table form, if any.
 	 *
-	 * The list table emits a `bulk-suppressions` nonce via display_tablenav();
-	 * we honor it for the bulk submit. Capability check is required even
-	 * after nonce verification (defense in depth — nonces don't authorize).
+	 * Runs INSIDE the page render rather than via admin-post.php so we don't
+	 * collide with WP_List_Table's <select name="action"> bulk dropdown.
+	 * Verifies the `bulk-suppressions` nonce that the list table emits
+	 * automatically via display_tablenav().
 	 *
 	 * @return void
 	 */
-	public function handle_bulk(): void {
+	private function maybe_handle_bulk(): void {
+		$action = $this->list_table->current_action();
+
+		if ( false === $action || 'remove' !== $action ) {
+			return;
+		}
+
 		check_admin_referer( 'bulk-suppressions' );
 
 		if ( ! current_user_can( self::CAPABILITY ) ) {
 			wp_die( esc_html__( 'You do not have permission to perform this action.', 'leastudios-email-templates' ) );
-		}
-
-		$action           = isset( $_POST['action'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['action'] ) ) : '';
-		$action_secondary = isset( $_POST['action2'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['action2'] ) ) : '';
-
-		// The bulk-action <select> is duplicated above and below the table.
-		// The one that wasn't "-1" wins.
-		$bulk_action = ( '' !== $action && '-1' !== $action ) ? $action : $action_secondary;
-
-		// We currently dispatch the bulk handler from a hidden 'action'
-		// input that names the admin-post hook. So $bulk_action above will
-		// either be our hook name (when "Apply" wasn't clicked) or the
-		// bulk-table dropdown value. Normalize: only act when the bulk
-		// value resolves to 'remove'.
-		if ( 'remove' !== $bulk_action ) {
-			wp_safe_redirect( $this->redirect_url( '' ) );
-			exit;
 		}
 
 		$ids = isset( $_POST['suppression'] ) && is_array( $_POST['suppression'] )
@@ -197,19 +185,24 @@ final class Suppressions_Page {
 			: [];
 
 		if ( empty( $ids ) ) {
-			wp_safe_redirect( $this->redirect_url( '' ) );
-			exit;
+			return;
 		}
 
-		// We have ids but the manager wants emails — fetch each row.
 		$repo = $this->list_table_repo();
+		if ( null === $repo ) {
+			return;
+		}
+
 		foreach ( $ids as $id ) {
-			$entry = $repo ? $repo->find_by_id( $id ) : null;
+			$entry = $repo->find_by_id( $id );
 			if ( null !== $entry ) {
 				$this->manager->unsuppress( $entry->email );
 			}
 		}
 
+		// Redirect to clear the POST + show notice. Has to happen before
+		// any output, so it works only because render() is the WP-managed
+		// page callback called before headers are sent.
 		wp_safe_redirect( $this->redirect_url( 'removed' ) );
 		exit;
 	}
