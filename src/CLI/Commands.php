@@ -204,4 +204,106 @@ class Commands {
 			'body'    => $body,
 		];
 	}
+
+	/**
+	 * Send a real sample email of the given type to the supplied address.
+	 *
+	 * The send goes through the same `Email_Sender::send()` path as the admin
+	 * Email Types tab's "Send test" button — wrapper, plain-text injection,
+	 * `_email_sent` action, log row — except that the row is tagged with
+	 * `source=cli-test` so support sessions can spot CLI-originated sends in
+	 * the log.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <type>
+	 * : The registered email type id (e.g. `payment_receipt`).
+	 *
+	 * <email>
+	 * : Recipient email address. No confirmation is shown.
+	 *
+	 * [--dry-run]
+	 * : Compose the email and print the wp_mail args without dispatching.
+	 * : No log row is created.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp leastudios-email-templates send-test payment_receipt support@example.test
+	 *     wp leastudios-email-templates send-test payment_receipt support@example.test --dry-run
+	 *
+	 * @param array<int, string>    $args       Positional arguments: [0] => type id, [1] => email.
+	 * @param array<string, string> $assoc_args Associative arguments.
+	 * @return void
+	 */
+	public function send_test( array $args, array $assoc_args ): void {
+		$type_id = (string) ( $args[0] ?? '' );
+		$email   = (string) ( $args[1] ?? '' );
+		$dry_run = isset( $assoc_args['dry-run'] );
+
+		$result = $this->dispatch_send_test( $type_id, $email, $dry_run );
+
+		if ( $dry_run ) {
+			\WP_CLI::log( '[dry-run] No email was sent and no log row was written.' );
+			\WP_CLI::log( 'To: ' . $email );
+			\WP_CLI::log( 'Subject: ' . $result['subject'] );
+			\WP_CLI::log( '' );
+			\WP_CLI::log( $result['body'] );
+			return;
+		}
+
+		if ( $result['sent'] ) {
+			\WP_CLI::success( sprintf( 'Sent %s to %s (logged as source=cli-test).', $type_id, $email ) );
+		} else {
+			\WP_CLI::error( sprintf( 'wp_mail returned false for type "%s" to %s. Check that the type is enabled and that mail is configured.', $type_id, $email ) );
+		}
+	}
+
+	/**
+	 * Validate args and dispatch the send. Pure-logic helper that tests can
+	 * call without going through the WP_CLI loggers.
+	 *
+	 * @param string $type_id Registered email type id.
+	 * @param string $email   Recipient address.
+	 * @param bool   $dry_run When true, no wp_mail is dispatched and no row is logged.
+	 * @return array{sent:bool, subject:string, body:string}
+	 */
+	public function dispatch_send_test( string $type_id, string $email, bool $dry_run ): array {
+		if ( null === $this->registry->get( $type_id ) ) {
+			\WP_CLI::error( sprintf( 'Unknown email type: %s', $type_id ) );
+			// WP_CLI::error throws in tests via the stub; in production it exits.
+			return [ 'sent' => false, 'subject' => '', 'body' => '' ];
+		}
+
+		if ( ! is_email( $email ) ) {
+			\WP_CLI::error( sprintf( '"%s" is not a valid email address.', $email ) );
+			// WP_CLI::error throws in tests via the stub; in production it exits.
+			return [ 'sent' => false, 'subject' => '', 'body' => '' ];
+		}
+
+		$definition = $this->registry->get( $type_id );
+		$context    = $definition->sample_context();
+
+		if ( $dry_run ) {
+			$composed = $this->sender->compose( $type_id, $context );
+			if ( null === $composed ) {
+				\WP_CLI::error( sprintf( 'Email type "%s" is disabled in settings (Email Types tab in wp-admin).', $type_id ) );
+				// WP_CLI::error throws in tests via the stub; in production it exits.
+				return [ 'sent' => false, 'subject' => '', 'body' => '' ];
+			}
+
+			return [
+				'sent'    => false,
+				'subject' => $composed['subject'],
+				'body'    => $composed['body'],
+			];
+		}
+
+		$sent = $this->sender->send( $type_id, $email, $context, 'cli-test' );
+
+		return [
+			'sent'    => $sent,
+			'subject' => '',
+			'body'    => '',
+		];
+	}
 }

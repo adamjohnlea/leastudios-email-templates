@@ -131,4 +131,55 @@ class CLICommandsTest extends TestCase {
 
 		$this->commands->render_preview( 'nope_does_not_exist', null, false );
 	}
+
+	public function test_dispatch_send_test_real_send_creates_log_row_with_cli_test_source(): void {
+		// Wire the real log subscriber so we can assert the row.
+		// Remove any logger already registered by Plugin::init (bootstrap loads
+		// the full plugin, which attaches its own Send_Logger) so only the
+		// test-controlled one fires.
+		remove_all_actions( 'leastudios_email_templates_email_sent' );
+		$repo   = new \LEAStudios\EmailTemplates\Database\Email_Log_Repository();
+		$repo->install();
+		$repo->delete_all();
+		( new \LEAStudios\EmailTemplates\Log\Send_Logger( $repo ) )->init();
+
+		$result = $this->commands->dispatch_send_test( 'payment_receipt', 'support@example.test', false );
+
+		$this->assertTrue( $result['sent'] );
+		$page = $repo->paginate( [], 10, 1 );
+		$this->assertCount( 1, $page['rows'] );
+		$this->assertSame( 'cli-test', $page['rows'][0]->source );
+	}
+
+	public function test_dispatch_send_test_dry_run_does_not_log(): void {
+		// Same isolation rationale as the test above.
+		remove_all_actions( 'leastudios_email_templates_email_sent' );
+		$repo = new \LEAStudios\EmailTemplates\Database\Email_Log_Repository();
+		$repo->install();
+		$repo->delete_all();
+		( new \LEAStudios\EmailTemplates\Log\Send_Logger( $repo ) )->init();
+
+		$result = $this->commands->dispatch_send_test( 'payment_receipt', 'support@example.test', true );
+
+		$this->assertFalse( $result['sent'] );
+		$this->assertArrayHasKey( 'subject', $result );
+		$this->assertArrayHasKey( 'body', $result );
+
+		$page = $repo->paginate( [], 10, 1 );
+		$this->assertCount( 0, $page['rows'] );
+	}
+
+	public function test_dispatch_send_test_rejects_invalid_email(): void {
+		$this->expectException( \RuntimeException::class );
+		$this->expectExceptionMessageMatches( '/not a valid email/i' );
+
+		$this->commands->dispatch_send_test( 'payment_receipt', 'not-an-email', false );
+	}
+
+	public function test_dispatch_send_test_rejects_unknown_type(): void {
+		$this->expectException( \RuntimeException::class );
+		$this->expectExceptionMessageMatches( '/Unknown email type/' );
+
+		$this->commands->dispatch_send_test( 'nope_does_not_exist', 'support@example.test', false );
+	}
 }
