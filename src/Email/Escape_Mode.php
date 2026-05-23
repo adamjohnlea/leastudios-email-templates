@@ -24,6 +24,7 @@ defined( 'ABSPATH' ) || exit;
 enum Escape_Mode: string {
 
 	case HTML = 'html';
-	case RAW  = 'raw';
-	case URL  = 'url';
+	// Only for server-side HTML payloads. Never for user input.
+	case RAW = 'raw';
+	case URL = 'url';
 }

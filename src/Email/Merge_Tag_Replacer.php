@@ -144,7 +144,7 @@ class Merge_Tag_Replacer {
 	/**
 	 * Apply an escape mode to a single value.
 	 *
-	 * @param string      $value The unsafe value.
+	 * @param string      $value The value to transform.
 	 * @param Escape_Mode $mode  The escape mode.
 	 * @return string
 	 */
