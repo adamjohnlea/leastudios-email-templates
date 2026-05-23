@@ -13,7 +13,6 @@ namespace LEAStudios\EmailTemplates\Payment;
 defined( 'ABSPATH' ) || exit;
 
 use LEAStudios\EmailTemplates\Email\Email_Sender;
-use LEAStudios\EmailTemplates\Email\Email_Type;
 
 /**
  * Hooks payment actions and dispatches emails.
@@ -60,7 +59,7 @@ class Payment_Email_Listener {
 			return;
 		}
 
-		$this->sender->send( Email_Type::PAYMENT_RECEIPT, $context['customer_email'], $context );
+		$this->sender->send( 'payment_receipt', $context['customer_email'], $context );
 	}
 
 	/**
@@ -115,7 +114,7 @@ class Payment_Email_Listener {
 		// risking duplicate welcome emails for transient SMTP errors.
 		update_option( $flag_key, time(), false );
 
-		$this->sender->send( Email_Type::SUBSCRIPTION_CREATED, $context['customer_email'], $context );
+		$this->sender->send( 'subscription_created', $context['customer_email'], $context );
 	}
 
 	/**
@@ -139,7 +138,7 @@ class Payment_Email_Listener {
 			return;
 		}
 
-		$this->sender->send( Email_Type::SUBSCRIPTION_RENEWED, $context['customer_email'], $context );
+		$this->sender->send( 'subscription_renewed', $context['customer_email'], $context );
 	}
 
 	/**
@@ -157,7 +156,7 @@ class Payment_Email_Listener {
 			return;
 		}
 
-		$this->sender->send( Email_Type::PAYMENT_FAILED, $context['customer_email'], $context );
+		$this->sender->send( 'payment_failed', $context['customer_email'], $context );
 	}
 
 	/**
@@ -233,6 +232,6 @@ class Payment_Email_Listener {
 		// different cumulative key) are unlikely to collide.
 		set_transient( $lock_key, true, 10 * MINUTE_IN_SECONDS );
 
-		$this->sender->send( Email_Type::REFUND_PROCESSED, $context['customer_email'], $context );
+		$this->sender->send( 'refund_processed', $context['customer_email'], $context );
 	}
 }

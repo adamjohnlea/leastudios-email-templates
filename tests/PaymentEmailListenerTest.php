@@ -10,7 +10,6 @@ declare(strict_types=1);
 namespace LEAStudios\EmailTemplates\Tests;
 
 use LEAStudios\EmailTemplates\Email\Email_Sender;
-use LEAStudios\EmailTemplates\Email\Email_Type;
 use LEAStudios\EmailTemplates\Email\Merge_Tag_Replacer;
 use LEAStudios\EmailTemplates\Payment\Payment_Data_Resolver;
 use LEAStudios\EmailTemplates\Payment\Payment_Email_Listener;
@@ -64,7 +63,7 @@ class PaymentEmailListenerTest extends TestCase {
 		$this->sender->expects( $this->once() )
 			->method( 'send' )
 			->with(
-				Email_Type::PAYMENT_RECEIPT,
+				'payment_receipt',
 				'buyer@example.com',
 				$this->anything()
 			);
@@ -148,7 +147,7 @@ class PaymentEmailListenerTest extends TestCase {
 		$this->sender->expects( $this->once() )
 			->method( 'send' )
 			->with(
-				Email_Type::SUBSCRIPTION_RENEWED,
+				'subscription_renewed',
 				'sub@example.com',
 				$this->anything()
 			);
@@ -172,7 +171,7 @@ class PaymentEmailListenerTest extends TestCase {
 		$this->sender->expects( $this->once() )
 			->method( 'send' )
 			->with(
-				Email_Type::PAYMENT_FAILED,
+				'payment_failed',
 				'fail@example.com',
 				$this->anything()
 			);
@@ -203,7 +202,7 @@ class PaymentEmailListenerTest extends TestCase {
 		$this->sender->expects( $this->once() )
 			->method( 'send' )
 			->with(
-				Email_Type::REFUND_PROCESSED,
+				'refund_processed',
 				'refund@example.com',
 				$this->anything()
 			);
@@ -233,7 +232,7 @@ class PaymentEmailListenerTest extends TestCase {
 		$this->sender->expects( $this->exactly( 2 ) )
 			->method( 'send' )
 			->with(
-				Email_Type::REFUND_PROCESSED,
+				'refund_processed',
 				'refund@example.com',
 				$this->anything()
 			);
