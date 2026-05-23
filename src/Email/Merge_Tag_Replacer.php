@@ -64,50 +64,61 @@ class Merge_Tag_Replacer {
 	];
 
 	/**
-	 * Replace merge tags in an HTML email body. Values are HTML-escaped before
-	 * substitution so user-controlled context (e.g. customer names) cannot
-	 * inject markup or scripts into the rendered email.
+	 * Replace merge tags in an HTML email body. Values default to HTML-escaping
+	 * via esc_html(); passing $escape_map lets specific tags opt into RAW
+	 * (insert unescaped — trusted HTML payload only) or URL (esc_url for hrefs).
 	 *
-	 * @param string               $content HTML template containing {tags}.
-	 * @param array<string, mixed> $context The tag values.
-	 * @return string HTML with tags replaced by escaped values.
+	 * @param string                     $content    HTML template containing {tags}.
+	 * @param array<string, mixed>       $context    The tag values.
+	 * @param array<string, Escape_Mode> $escape_map Map of unbraced tag name => escape mode. Tags absent from the map default to HTML.
+	 * @return string HTML with tags replaced and per-tag escapes applied.
 	 */
-	public function replace_html( string $content, array $context = [] ): string {
-		return $this->substitute(
-			$content,
-			$context,
-			static fn( string $value ): string => esc_html( $value )
-		);
+	public function replace_html( string $content, array $context = [], array $escape_map = [] ): string {
+		return $this->substitute( $content, $context, $escape_map );
 	}
 
 	/**
 	 * Replace merge tags in a subject line or other single-line plain-text
-	 * field. Strips CR/LF from values to prevent email-header injection in
-	 * case the subject is later concatenated into raw headers.
+	 * field. Strips CR/LF/Tab from values to prevent email-header injection
+	 * in case the subject is later concatenated into raw headers.
 	 *
 	 * @param string               $content Plain-text template containing {tags}.
 	 * @param array<string, mixed> $context The tag values.
-	 * @return string Plain text with tags replaced and CR/LF stripped.
+	 * @return string Plain text with tags replaced and CR/LF/Tab stripped.
 	 */
 	public function replace_subject( string $content, array $context = [] ): string {
-		return $this->substitute(
-			$content,
-			$context,
-			static fn( string $value ): string => preg_replace( '/[\r\n\t]+/', ' ', $value ) ?? ''
-		);
+		$context = array_merge( $this->get_global_tags(), $context );
+
+		/** This filter is documented in self::substitute(). */
+		$context = (array) apply_filters( 'leastudios_email_templates_merge_tags', $context, $content );
+
+		$search  = [];
+		$replace = [];
+
+		foreach ( $context as $key => $value ) {
+			$search[]  = '{' . $key . '}';
+			$replace[] = preg_replace( '/[\r\n\t]+/', ' ', (string) $value ) ?? '';
+		}
+
+		return str_replace( $search, $replace, $content );
 	}
 
 	/**
-	 * Internal substitution engine. Applies $sanitize to each value before
-	 * inserting into the template via str_replace.
+	 * Internal substitution engine. Applies the per-tag escape mode from
+	 * $escape_map to each value before inserting into the template. Tags not
+	 * in the map default to Escape_Mode::HTML (the safe default).
 	 *
-	 * @param string                  $content  The template.
-	 * @param array<string, mixed>    $context  The tag values.
-	 * @param callable(string):string $sanitize Per-value sanitiser.
+	 * Globals (site_name, site_url, date) have their escape modes appended
+	 * to $escape_map here so callers don't need to know about them.
+	 *
+	 * @param string                     $content    The template.
+	 * @param array<string, mixed>       $context    The tag values.
+	 * @param array<string, Escape_Mode> $escape_map Tag => Escape_Mode (unbraced keys).
 	 * @return string
 	 */
-	private function substitute( string $content, array $context, callable $sanitize ): string {
-		$context = array_merge( $this->get_global_tags(), $context );
+	private function substitute( string $content, array $context, array $escape_map ): string {
+		$context    = array_merge( $this->get_global_tags(), $context );
+		$escape_map = array_merge( $this->get_global_escape_modes(), $escape_map );
 
 		/**
 		 * Filters the merge tag context before replacement.
@@ -121,11 +132,41 @@ class Merge_Tag_Replacer {
 		$replace = [];
 
 		foreach ( $context as $key => $value ) {
+			$mode = $escape_map[ $key ] ?? Escape_Mode::HTML;
+
 			$search[]  = '{' . $key . '}';
-			$replace[] = $sanitize( (string) $value );
+			$replace[] = $this->apply_escape( (string) $value, $mode );
 		}
 
 		return str_replace( $search, $replace, $content );
+	}
+
+	/**
+	 * Apply an escape mode to a single value.
+	 *
+	 * @param string      $value The unsafe value.
+	 * @param Escape_Mode $mode  The escape mode.
+	 * @return string
+	 */
+	private function apply_escape( string $value, Escape_Mode $mode ): string {
+		return match ( $mode ) {
+			Escape_Mode::HTML => esc_html( $value ),
+			Escape_Mode::RAW  => $value,
+			Escape_Mode::URL  => esc_url( $value ),
+		};
+	}
+
+	/**
+	 * Escape modes for the replacer's built-in global tags.
+	 *
+	 * @return array<string, Escape_Mode>
+	 */
+	private function get_global_escape_modes(): array {
+		return [
+			'site_name' => Escape_Mode::HTML,
+			'site_url'  => Escape_Mode::URL,
+			'date'      => Escape_Mode::HTML,
+		];
 	}
 
 	/**

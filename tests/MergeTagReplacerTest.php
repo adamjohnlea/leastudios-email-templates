@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace LEAStudios\EmailTemplates\Tests;
 
+use LEAStudios\EmailTemplates\Email\Escape_Mode;
 use LEAStudios\EmailTemplates\Email\Merge_Tag_Replacer;
 use LEAStudios\Tests\TestCase;
 
@@ -149,5 +150,72 @@ class MergeTagReplacerTest extends TestCase {
 		$this->assertStringNotContainsString( "\n", $result );
 		$this->assertStringContainsString( 'Mallory', $result );
 		$this->assertStringContainsString( 'attacker@evil.example', $result );
+	}
+
+	public function test_raw_escape_mode_inserts_html_unchanged(): void {
+		$result = $this->replacer->replace_html(
+			'<p>Pricing: {plans_table}</p>',
+			[ 'plans_table' => '<table><tr><td>Pro</td></tr></table>' ],
+			[ 'plans_table' => Escape_Mode::RAW ]
+		);
+
+		$this->assertStringContainsString( '<table><tr><td>Pro</td></tr></table>', $result );
+		$this->assertStringNotContainsString( '&lt;table&gt;', $result );
+	}
+
+	public function test_url_escape_mode_runs_value_through_esc_url(): void {
+		$result = $this->replacer->replace_html(
+			'<a href="{cta_url}">Click</a>',
+			[ 'cta_url' => 'https://example.com/path?a=1&b=2' ],
+			[ 'cta_url' => Escape_Mode::URL ]
+		);
+
+		$this->assertStringContainsString( 'href="https://example.com/path?a=1', $result );
+		$this->assertStringContainsString( '&#038;b=2', $result, 'esc_url should encode bare ampersands as &#038;' );
+	}
+
+	public function test_url_escape_mode_rejects_invalid_scheme(): void {
+		$result = $this->replacer->replace_html(
+			'<a href="{cta_url}">Click</a>',
+			[ 'cta_url' => 'javascript:alert(1)' ],
+			[ 'cta_url' => Escape_Mode::URL ]
+		);
+
+		$this->assertStringNotContainsString( 'javascript:alert(1)', $result );
+	}
+
+	public function test_html_escape_mode_is_default_when_map_omits_tag(): void {
+		$result = $this->replacer->replace_html(
+			'<p>{name}</p>',
+			[ 'name' => '<script>alert(1)</script>' ],
+			[]
+		);
+
+		$this->assertStringNotContainsString( '<script>', $result );
+		$this->assertStringContainsString( '&lt;script&gt;', $result );
+	}
+
+	public function test_escape_map_does_not_affect_other_tags(): void {
+		$result = $this->replacer->replace_html(
+			'<p>{name}: {payload}</p>',
+			[
+				'name'    => '<b>Bold</b>',
+				'payload' => '<em>Italic</em>',
+			],
+			[ 'payload' => Escape_Mode::RAW ]
+		);
+
+		// Name uses default HTML escape; payload is RAW.
+		$this->assertStringContainsString( '&lt;b&gt;Bold&lt;/b&gt;', $result );
+		$this->assertStringContainsString( '<em>Italic</em>', $result );
+	}
+
+	public function test_global_site_url_is_url_escaped_by_default(): void {
+		update_option( 'home', 'https://example.com/wp?x=1&y=2' );
+
+		$result = $this->replacer->replace_html( 'Visit {site_url}' );
+
+		$this->assertStringContainsString( 'https://example.com/wp?x=1', $result );
+		$this->assertStringContainsString( '&#038;y=2', $result );
 	}
 }
