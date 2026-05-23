@@ -10,7 +10,6 @@ declare(strict_types=1);
 namespace LEAStudios\EmailTemplates\Tests;
 
 use LEAStudios\EmailTemplates\Database\Email_Log_Repository;
-use LEAStudios\EmailTemplates\Email\Email_Type;
 use LEAStudios\EmailTemplates\Log\Send_Logger;
 use LEAStudios\Tests\TestCase;
 
@@ -32,7 +31,7 @@ class SendLoggerTest extends TestCase {
 
 	public function test_records_successful_send(): void {
 		$this->logger->record(
-			Email_Type::PAYMENT_RECEIPT,
+			'payment_receipt',
 			'buyer@example.com',
 			'Receipt',
 			true,
@@ -50,7 +49,7 @@ class SendLoggerTest extends TestCase {
 
 	public function test_records_failed_send(): void {
 		$this->logger->record(
-			Email_Type::PAYMENT_FAILED,
+			'payment_failed',
 			'fail@example.com',
 			'Fail',
 			false,
