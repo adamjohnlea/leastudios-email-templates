@@ -26,6 +26,8 @@ class EmailSenderTest extends TestCase {
 
 	private Email_Sender $sender;
 
+	private Email_Type_Registry $registry;
+
 	private \LEAStudios\EmailTemplates\Database\Suppression_Repository $suppression_repo;
 
 	private \LEAStudios\EmailTemplates\Subscription\Unsubscribe_Manager $manager;
@@ -33,12 +35,12 @@ class EmailSenderTest extends TestCase {
 	public function set_up(): void {
 		parent::set_up();
 
-		$registry = new Email_Type_Registry();
-		$registry->register( new Payment_Receipt() );
-		$registry->register( new Subscription_Created() );
-		$registry->register( new Subscription_Renewed() );
-		$registry->register( new Payment_Failed() );
-		$registry->register( new Refund_Processed() );
+		$this->registry = new Email_Type_Registry();
+		$this->registry->register( new Payment_Receipt() );
+		$this->registry->register( new Subscription_Created() );
+		$this->registry->register( new Subscription_Renewed() );
+		$this->registry->register( new Payment_Failed() );
+		$this->registry->register( new Refund_Processed() );
 
 		// Force a fresh install each test — the schema-version option is
 		// cached in wp_alloptions across tests, so the install() short-circuit
@@ -51,7 +53,7 @@ class EmailSenderTest extends TestCase {
 		delete_option( 'leastudios_email_templates_unsubscribe_secret' );
 		$this->manager = new \LEAStudios\EmailTemplates\Subscription\Unsubscribe_Manager( $this->suppression_repo );
 
-		$this->sender = new Email_Sender( new Merge_Tag_Replacer(), $registry, $this->manager );
+		$this->sender = new Email_Sender( new Merge_Tag_Replacer(), $this->registry, $this->manager );
 
 		reset_phpmailer_instance();
 	}
@@ -344,5 +346,110 @@ class EmailSenderTest extends TestCase {
 
 		$this->assertTrue( $result, 'required-type send must bypass the gate' );
 		$this->assertTrue( $mail_called );
+	}
+
+	private function register_phase9_fixture(): void {
+		$this->registry->register(
+			new class() extends \LEAStudios\EmailTemplates\Email\Abstract_Email_Type {
+				public function id(): string {
+					return 'phase9_fixture'; }
+				public function label(): string {
+					return 'Phase 9 Fixture'; }
+				public function default_subject(): string {
+					return 'Phase 9'; }
+				public function default_body(): string {
+					return '<a href="{unsubscribe_url}">opt out</a>'; }
+				public function available_tags(): array {
+					return [
+						'{unsubscribe_url}' => [
+							'description' => 'Opt-out URL',
+							'escape'      => \LEAStudios\EmailTemplates\Email\Escape_Mode::URL,
+						],
+					];
+				}
+				public function sample_context(): array {
+					return []; }
+				public function is_transactional_required(): bool {
+					return false; }
+			}
+		);
+	}
+
+	public function test_unsubscribe_url_resolves_to_real_url_for_non_required_with_recipient(): void {
+		$this->register_phase9_fixture();
+
+		$composed = $this->sender->compose( 'phase9_fixture', [], 'jane@example.com' );
+
+		$this->assertNotNull( $composed );
+		$body = (string) $composed['body'];
+		// Accept either pretty-permalink (/wp-json/...) or default rest_route= form.
+		$has_rest_path = str_contains( $body, '/wp-json/leastudios-email-templates/v1/unsubscribe' )
+			|| str_contains( $body, 'leastudios-email-templates%2Fv1%2Funsubscribe' );
+		$this->assertTrue( $has_rest_path, 'body must contain the unsubscribe REST route' );
+		$this->assertStringContainsString( 'token=', $body );
+	}
+
+	public function test_unsubscribe_url_resolves_to_empty_for_required_type(): void {
+		$this->registry->register(
+			new class() extends \LEAStudios\EmailTemplates\Email\Abstract_Email_Type {
+				public function id(): string {
+					return 'phase9_required_fixture'; }
+				public function label(): string {
+					return 'Phase 9 Required Fixture'; }
+				public function default_subject(): string {
+					return 'X'; }
+				public function default_body(): string {
+					return '<a href="{unsubscribe_url}">opt out</a>'; }
+				public function available_tags(): array {
+					return [
+						'{unsubscribe_url}' => [
+							'description' => 'Opt-out URL',
+							'escape'      => \LEAStudios\EmailTemplates\Email\Escape_Mode::URL,
+						],
+					];
+				}
+				public function sample_context(): array {
+					return []; }
+				public function is_transactional_required(): bool {
+					return true; }
+			}
+		);
+
+		$composed = $this->sender->compose( 'phase9_required_fixture', [], 'jane@example.com' );
+
+		$this->assertNotNull( $composed );
+		$body = (string) $composed['body'];
+		$this->assertStringNotContainsString( '/wp-json/leastudios-email-templates/v1/unsubscribe', $body );
+		$this->assertStringNotContainsString( 'leastudios-email-templates%2Fv1%2Funsubscribe', $body );
+		$this->assertStringContainsString( 'href=""', $body, 'empty URL must be esc_url-empty in href' );
+	}
+
+	public function test_unsubscribe_url_resolves_to_empty_when_to_is_empty(): void {
+		$this->register_phase9_fixture();
+		$composed = $this->sender->compose( 'phase9_fixture', [], '' );
+
+		$this->assertNotNull( $composed );
+		$body = (string) $composed['body'];
+		$this->assertStringNotContainsString( '/wp-json/leastudios-email-templates/v1/unsubscribe', $body );
+		$this->assertStringNotContainsString( 'leastudios-email-templates%2Fv1%2Funsubscribe', $body );
+	}
+
+	public function test_unsubscribe_url_filter_is_applied(): void {
+		$this->register_phase9_fixture();
+
+		add_filter(
+			'leastudios_email_templates_unsubscribe_url',
+			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- filter signature requires all three params.
+			static fn ( $url, $email, $type_id ): string => 'https://example.com/opt-out?u=' . rawurlencode( $email ),
+			10,
+			3
+		);
+
+		$composed = $this->sender->compose( 'phase9_fixture', [], 'jane@example.com' );
+
+		remove_all_filters( 'leastudios_email_templates_unsubscribe_url' );
+
+		$this->assertNotNull( $composed );
+		$this->assertStringContainsString( 'example.com/opt-out', (string) $composed['body'] );
 	}
 }

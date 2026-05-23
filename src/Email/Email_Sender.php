@@ -70,7 +70,7 @@ class Email_Sender {
 			return $this->fire_suppressed( $type_id, $to, $context, $source );
 		}
 
-		$composed = $this->compose( $type_id, $context );
+		$composed = $this->compose( $type_id, $context, $to );
 
 		if ( null === $composed ) {
 			return false;
@@ -138,12 +138,13 @@ class Email_Sender {
 	 *
 	 * @param string               $type_id Registered email type id.
 	 * @param array<string, mixed> $context Merge-tag values.
-	 * @param string               $to      Recipient address. Reserved for use
-	 *                                      by Task 7 (unsubscribe_url injection);
-	 *                                      currently unused inside compose().
+	 * @param string               $to      Recipient address. Used to inject
+	 *                                      the `{unsubscribe_url}` merge tag —
+	 *                                      empty for required types or empty/invalid
+	 *                                      recipients, a real signed URL otherwise.
 	 * @return array{subject:string, body:string, headers:array<int,string>}|null
 	 */
-	public function compose( string $type_id, array $context = [], string $to = '' ): ?array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- $to is wired in Task 7 of the Phase 9 plan.
+	public function compose( string $type_id, array $context = [], string $to = '' ): ?array {
 		$definition = $this->registry->get( $type_id );
 
 		if ( null === $definition ) {
@@ -156,6 +157,14 @@ class Email_Sender {
 			return null;
 		}
 
+		// Phase 9 — inject the recipient-aware near-global tag. Required types
+		// and empty recipients get an empty string; the filter lets sites
+		// rewrite the URL (e.g., route through a CDN).
+		$context = array_merge(
+			[ 'unsubscribe_url' => $this->resolve_unsubscribe_url( $to, $definition ) ],
+			$context
+		);
+
 		$subject = '' !== $settings['subject'] ? $settings['subject'] : $definition->default_subject();
 		$body    = '' !== $settings['body'] ? $settings['body'] : $definition->default_body();
 
@@ -167,6 +176,31 @@ class Email_Sender {
 			'body'    => $body,
 			'headers' => [ 'Content-Type: text/html; charset=UTF-8' ],
 		];
+	}
+
+	/**
+	 * Resolve the value of the `{unsubscribe_url}` merge tag for a send.
+	 *
+	 * @param string                $to         Recipient address.
+	 * @param Email_Type_Definition $definition The type being composed.
+	 * @return string Empty string for required types or empty/invalid
+	 *                recipients; otherwise the signed unsubscribe URL.
+	 */
+	private function resolve_unsubscribe_url( string $to, Email_Type_Definition $definition ): string {
+		if ( $definition->is_transactional_required() || '' === $to || ! is_email( $to ) ) {
+			return '';
+		}
+
+		$url = $this->manager->url_for( $to );
+
+		/**
+		 * Filters the rendered unsubscribe URL.
+		 *
+		 * @param string $url     The default URL ('/wp-json/.../v1/unsubscribe?token=…').
+		 * @param string $email   Recipient.
+		 * @param string $type_id Type id being composed.
+		 */
+		return (string) apply_filters( 'leastudios_email_templates_unsubscribe_url', $url, $to, $definition->id() );
 	}
 
 	/**
