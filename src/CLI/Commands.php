@@ -187,7 +187,8 @@ class Commands {
 		$composed = $this->sender->compose( $type_id, $context );
 
 		if ( null === $composed ) {
-			\WP_CLI::error( sprintf( 'Email type "%s" is disabled in settings.', $type_id ) );
+			\WP_CLI::error( sprintf( 'Email type "%s" is disabled in settings (Email Types tab in wp-admin).', $type_id ) );
+			// WP_CLI::error throws in tests via the stub; in production it exits.
 			return [ 'subject' => '', 'body' => '' ];
 		}
 
