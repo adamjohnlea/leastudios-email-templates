@@ -107,10 +107,10 @@ final class Plugin {
 		// the CLI is actually running, keeping the autoload graph quiet for
 		// web requests.
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
-			\WP_CLI::add_command(
-				'leastudios-email-templates',
-				new Commands( $registry, $sender, $replacer )
-			);
+			$cli_commands = new Commands( $registry, $sender, $replacer );
+			\WP_CLI::add_command( 'leastudios-email-templates list-types', [ $cli_commands, 'list_types' ] );
+			\WP_CLI::add_command( 'leastudios-email-templates preview', [ $cli_commands, 'preview' ] );
+			\WP_CLI::add_command( 'leastudios-email-templates send-test', [ $cli_commands, 'send_test' ] );
 		}
 
 		// Payment integration (only when payments plugin is active).

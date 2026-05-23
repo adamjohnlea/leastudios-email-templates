@@ -72,8 +72,6 @@ class Commands {
 	 *     wp leastudios-email-templates list-types
 	 *     wp leastudios-email-templates list-types --format=json
 	 *
-	 * @subcommand list-types
-	 *
 	 * @param array<int, string>    $args       Positional arguments.
 	 * @param array<string, string> $assoc_args Associative arguments.
 	 * @return void
@@ -232,8 +230,6 @@ class Commands {
 	 *
 	 *     wp leastudios-email-templates send-test payment_receipt support@example.test
 	 *     wp leastudios-email-templates send-test payment_receipt support@example.test --dry-run
-	 *
-	 * @subcommand send-test
 	 *
 	 * @param array<int, string>    $args       Positional arguments: [0] => type id, [1] => email.
 	 * @param array<string, string> $assoc_args Associative arguments.
