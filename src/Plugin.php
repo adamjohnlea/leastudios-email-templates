@@ -14,8 +14,11 @@ defined( 'ABSPATH' ) || exit;
 
 use LEAStudios\EmailTemplates\Admin\Email_Log_Page;
 use LEAStudios\EmailTemplates\Admin\Settings_Page;
+use LEAStudios\EmailTemplates\Admin\Suppressions_List_Table;
+use LEAStudios\EmailTemplates\Admin\Suppressions_Page;
 use LEAStudios\EmailTemplates\Database\Email_Log_Repository;
 use LEAStudios\EmailTemplates\Database\Suppression_Repository;
+use LEAStudios\EmailTemplates\REST\Unsubscribe_Controller;
 use LEAStudios\EmailTemplates\Subscription\Unsubscribe_Manager;
 use LEAStudios\EmailTemplates\Email\Built_In\Payment_Failed;
 use LEAStudios\EmailTemplates\Email\Built_In\Payment_Receipt;
@@ -75,6 +78,28 @@ final class Plugin {
 			}
 		);
 
+		// Persistent suppression store for Phase 9. install() is idempotent
+		// (a schema-version option short-circuits the no-op case) so it can
+		// run on every request without measurable cost.
+		$suppression_repo = new Suppression_Repository();
+		$suppression_repo->install();
+
+		// Unsubscribe / suppression facade — a single instance is shared by
+		// Email_Sender (gate), the REST controller (token mint/verify), the
+		// admin page, and the WP-CLI commands so all surfaces see the same
+		// state and use the same HMAC secret.
+		$unsubscribe = new Unsubscribe_Manager( $suppression_repo );
+
+		// Public REST endpoints for one-click unsubscribe and POST resubscribe.
+		// Registered on rest_api_init so the routes only spin up as part of
+		// the REST bootstrap rather than for every page load.
+		add_action(
+			'rest_api_init',
+			static function () use ( $unsubscribe ): void {
+				( new Unsubscribe_Controller( $unsubscribe ) )->register_routes();
+			}
+		);
+
 		// Type registry — populated with built-ins and then opened up to
 		// third parties via the leastudios_email_templates_register_types
 		// action. Third parties must register their callback at file scope
@@ -102,13 +127,6 @@ final class Plugin {
 		 */
 		do_action( 'leastudios_email_templates_register_types', $registry );
 
-		// Unsubscribe / suppression manager. Task 16 of the Phase 9 plan will
-		// fully wire the REST + admin surfaces; for now the manager is wired
-		// solely so Email_Sender can gate non-required sends to suppressed
-		// recipients.
-		$suppression_repo = new Suppression_Repository();
-		$unsubscribe      = new Unsubscribe_Manager( $suppression_repo );
-
 		// Email sender for transactional emails.
 		$sender = new Email_Sender( $replacer, $registry, $unsubscribe );
 
@@ -121,6 +139,8 @@ final class Plugin {
 			\WP_CLI::add_command( 'leastudios-email-templates preview', [ $cli_commands, 'preview' ] );
 			\WP_CLI::add_command( 'leastudios-email-templates send-test', [ $cli_commands, 'send_test' ] );
 			\WP_CLI::add_command( 'leastudios-email-templates list-suppressions', [ $cli_commands, 'list_suppressions' ] );
+			\WP_CLI::add_command( 'leastudios-email-templates add-suppression', [ $cli_commands, 'add_suppression' ] );
+			\WP_CLI::add_command( 'leastudios-email-templates remove-suppression', [ $cli_commands, 'remove_suppression' ] );
 		}
 
 		// Payment integration (only when payments plugin is active).
@@ -137,6 +157,12 @@ final class Plugin {
 
 			$log_page = new Email_Log_Page( $log_repo, $registry );
 			$log_page->init();
+
+			$suppressions_page = new Suppressions_Page(
+				$unsubscribe,
+				new Suppressions_List_Table( $suppression_repo )
+			);
+			$suppressions_page->init();
 		}
 	}
 
