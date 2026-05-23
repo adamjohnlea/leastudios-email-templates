@@ -86,7 +86,7 @@ class SendLoggerTest extends TestCase {
 	}
 
 	public function test_record_defaults_source_to_web_in_php_payload(): void {
-		$spy = new class extends Email_Log_Repository {
+		$spy = new class() extends Email_Log_Repository {
 			/** @var array<string, mixed>|null */
 			public ?array $last_data = null;
 

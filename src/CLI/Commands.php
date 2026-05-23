@@ -122,8 +122,9 @@ class Commands {
 	 * <type>
 	 * : The registered email type id (e.g. `payment_receipt`). Run `wp leastudios-email-templates list-types` to see all ids.
 	 *
-	 * [--context=<json>]
+	 * [--data=<json>]
 	 * : JSON-encoded merge-tag context overrides. Keys are unbraced tag names.
+	 *   (Named --data to avoid collision with WP-CLI's built-in --context global.)
 	 *
 	 * [--subject]
 	 * : Print only the rendered subject.
@@ -132,7 +133,7 @@ class Commands {
 	 *
 	 *     wp leastudios-email-templates preview payment_receipt
 	 *     wp leastudios-email-templates preview payment_receipt --subject
-	 *     wp leastudios-email-templates preview payment_receipt --context='{"customer_name":"Ada"}' > out.html
+	 *     wp leastudios-email-templates preview payment_receipt --data='{"customer_name":"Ada"}' > out.html
 	 *
 	 * @param array<int, string>    $args       Positional arguments: [0] => type id.
 	 * @param array<string, string> $assoc_args Associative arguments.
@@ -140,14 +141,14 @@ class Commands {
 	 */
 	public function preview( array $args, array $assoc_args ): void {
 		$type_id          = (string) ( $args[0] ?? '' );
-		$context_json     = $assoc_args['context'] ?? null;
+		$context_json     = $assoc_args['data'] ?? null;
 		$subject_only     = isset( $assoc_args['subject'] );
 		$context_override = null;
 
 		if ( null !== $context_json ) {
 			$decoded = json_decode( (string) $context_json, true );
 			if ( ! is_array( $decoded ) ) {
-				\WP_CLI::error( '--context must be a JSON object.' );
+				\WP_CLI::error( '--data must be a JSON object.' );
 				return;
 			}
 			$context_override = $decoded;
@@ -178,7 +179,10 @@ class Commands {
 		if ( null === $definition ) {
 			\WP_CLI::error( sprintf( 'Unknown email type: %s', $type_id ) );
 			// WP_CLI::error throws in tests via the stub; in production it exits.
-			return [ 'subject' => '', 'body' => '' ];
+			return [
+				'subject' => '',
+				'body'    => '',
+			];
 		}
 
 		$context = array_merge( $definition->sample_context(), $context_override ?? [] );
@@ -188,7 +192,10 @@ class Commands {
 		if ( null === $composed ) {
 			\WP_CLI::error( sprintf( 'Email type "%s" is disabled in settings (Email Types tab in wp-admin).', $type_id ) );
 			// WP_CLI::error throws in tests via the stub; in production it exits.
-			return [ 'subject' => '', 'body' => '' ];
+			return [
+				'subject' => '',
+				'body'    => '',
+			];
 		}
 
 		$body = '';
@@ -269,13 +276,21 @@ class Commands {
 		if ( null === $this->registry->get( $type_id ) ) {
 			\WP_CLI::error( sprintf( 'Unknown email type: %s', $type_id ) );
 			// WP_CLI::error throws in tests via the stub; in production it exits.
-			return [ 'sent' => false, 'subject' => '', 'body' => '' ];
+			return [
+				'sent'    => false,
+				'subject' => '',
+				'body'    => '',
+			];
 		}
 
 		if ( ! is_email( $email ) ) {
 			\WP_CLI::error( sprintf( '"%s" is not a valid email address.', $email ) );
 			// WP_CLI::error throws in tests via the stub; in production it exits.
-			return [ 'sent' => false, 'subject' => '', 'body' => '' ];
+			return [
+				'sent'    => false,
+				'subject' => '',
+				'body'    => '',
+			];
 		}
 
 		$definition = $this->registry->get( $type_id );
@@ -286,7 +301,11 @@ class Commands {
 			if ( null === $composed ) {
 				\WP_CLI::error( sprintf( 'Email type "%s" is disabled in settings (Email Types tab in wp-admin).', $type_id ) );
 				// WP_CLI::error throws in tests via the stub; in production it exits.
-				return [ 'sent' => false, 'subject' => '', 'body' => '' ];
+				return [
+					'sent'    => false,
+					'subject' => '',
+					'body'    => '',
+				];
 			}
 
 			return [

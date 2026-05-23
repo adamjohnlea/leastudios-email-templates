@@ -67,7 +67,7 @@ class CLICommandsTest extends TestCase {
 	}
 
 	public function test_build_type_rows_marks_unknown_definitions_as_third_party(): void {
-		$stub = new class extends Abstract_Email_Type {
+		$stub = new class() extends Abstract_Email_Type {
 			public function id(): string {
 				return 'my_custom_type';
 			}
@@ -138,7 +138,7 @@ class CLICommandsTest extends TestCase {
 		// the full plugin, which attaches its own Send_Logger) so only the
 		// test-controlled one fires.
 		remove_all_actions( 'leastudios_email_templates_email_sent' );
-		$repo   = new \LEAStudios\EmailTemplates\Database\Email_Log_Repository();
+		$repo = new \LEAStudios\EmailTemplates\Database\Email_Log_Repository();
 		$repo->install();
 		$repo->delete_all();
 		( new \LEAStudios\EmailTemplates\Log\Send_Logger( $repo ) )->init();

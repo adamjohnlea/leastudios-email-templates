@@ -40,7 +40,9 @@ require "{$_tests_dir}/includes/bootstrap.php";
 // Records calls into static arrays so tests can assert on output without
 // requiring the real WP-CLI binary to be present at test time.
 if ( ! class_exists( 'WP_CLI' ) ) {
-	eval( <<<'PHP'
+	// phpcs:ignore Squiz.PHP.Eval.Discouraged -- necessary to define a class conditionally for test stubs.
+	eval(
+		<<<'PHP'
 		class WP_CLI {
 			public static array $log_calls = [];
 			public static array $success_calls = [];
@@ -82,7 +84,9 @@ PHP
 // public signature: format_items(string $format, array $items, array|string $fields)
 // and emit one of table|csv|json|yaml. Tests assert on the printed output.
 if ( ! function_exists( 'WP_CLI\\Utils\\format_items' ) ) {
-	eval( <<<'PHP'
+	// phpcs:ignore Squiz.PHP.Eval.Discouraged -- necessary to define a namespaced function conditionally for test stubs.
+	eval(
+		<<<'PHP'
 		namespace WP_CLI\Utils;
 		function format_items( string $format, array $items, $fields ): void {
 			$field_list = is_array( $fields ) ? $fields : array_map( 'trim', explode( ',', (string) $fields ) );
