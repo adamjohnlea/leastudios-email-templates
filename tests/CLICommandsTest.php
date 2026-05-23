@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace LEAStudios\EmailTemplates\Tests;
 
 use LEAStudios\EmailTemplates\CLI\Commands;
+use LEAStudios\EmailTemplates\Email\Abstract_Email_Type;
 use LEAStudios\EmailTemplates\Email\Built_In\Payment_Receipt;
 use LEAStudios\EmailTemplates\Email\Built_In\Subscription_Created;
 use LEAStudios\EmailTemplates\Email\Email_Sender;
@@ -63,5 +64,38 @@ class CLICommandsTest extends TestCase {
 		foreach ( $rows as $row ) {
 			$this->assertSame( 'built-in', $row['source'] );
 		}
+	}
+
+	public function test_build_type_rows_marks_unknown_definitions_as_third_party(): void {
+		$stub = new class extends Abstract_Email_Type {
+			public function id(): string {
+				return 'my_custom_type';
+			}
+			public function label(): string {
+				return 'Custom';
+			}
+			public function default_subject(): string {
+				return 'Subject';
+			}
+			public function default_body(): string {
+				return 'Body';
+			}
+			public function available_tags(): array {
+				return [];
+			}
+			public function sample_context(): array {
+				return [];
+			}
+		};
+
+		$registry = new Email_Type_Registry();
+		$registry->register( $stub );
+		$commands = new Commands( $registry, $this->sender, $this->replacer );
+
+		$rows = $commands->build_type_rows();
+
+		$this->assertCount( 1, $rows );
+		$this->assertSame( 'third-party', $rows[0]['source'] );
+		$this->assertSame( 'my_custom_type', $rows[0]['id'] );
 	}
 }
