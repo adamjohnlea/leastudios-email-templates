@@ -14,7 +14,6 @@ defined( 'ABSPATH' ) || exit;
 
 use LEAStudios\EmailTemplates\Admin\Email_Log_Page;
 use LEAStudios\EmailTemplates\Admin\Settings_Page;
-use LEAStudios\EmailTemplates\Admin\Suppressions_List_Table;
 use LEAStudios\EmailTemplates\Admin\Suppressions_Page;
 use LEAStudios\EmailTemplates\Database\Email_Log_Repository;
 use LEAStudios\EmailTemplates\Database\Suppression_Repository;
@@ -158,10 +157,7 @@ final class Plugin {
 			$log_page = new Email_Log_Page( $log_repo, $registry );
 			$log_page->init();
 
-			$suppressions_page = new Suppressions_Page(
-				$unsubscribe,
-				new Suppressions_List_Table( $suppression_repo )
-			);
+			$suppressions_page = new Suppressions_Page( $unsubscribe, $suppression_repo );
 			$suppressions_page->init();
 		}
 	}

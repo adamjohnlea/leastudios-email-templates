@@ -12,6 +12,7 @@ namespace LEAStudios\EmailTemplates\Admin;
 // Prevent direct access.
 defined( 'ABSPATH' ) || exit;
 
+use LEAStudios\EmailTemplates\Database\Suppression_Repository;
 use LEAStudios\EmailTemplates\Subscription\Unsubscribe_Manager;
 
 /**
@@ -26,15 +27,38 @@ final class Suppressions_Page {
 	private const CAPABILITY = 'manage_options';
 
 	/**
+	 * Lazily-built list table.
+	 *
+	 * WP_List_Table::__construct calls convert_to_screen(), which is only
+	 * defined once wp-admin/includes/template.php has loaded — i.e. inside an
+	 * admin request, after plugins_loaded. Building it on demand inside the
+	 * page-render flow keeps Plugin::init safe to run on every request.
+	 *
+	 * @var Suppressions_List_Table|null
+	 */
+	private ?Suppressions_List_Table $list_table = null;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Unsubscribe_Manager     $manager    Token/suppression facade.
-	 * @param Suppressions_List_Table $list_table List table renderer.
+	 * @param Unsubscribe_Manager    $manager Token/suppression facade.
+	 * @param Suppression_Repository $repo    Repository used by the list table.
 	 */
 	public function __construct(
 		private readonly Unsubscribe_Manager $manager,
-		private readonly Suppressions_List_Table $list_table,
+		private readonly Suppression_Repository $repo,
 	) {}
+
+	/**
+	 * Build (or fetch) the list table.
+	 */
+	private function list_table(): Suppressions_List_Table {
+		if ( null === $this->list_table ) {
+			$this->list_table = new Suppressions_List_Table( $this->repo );
+		}
+
+		return $this->list_table;
+	}
 
 	/**
 	 * Register menus + admin-post handlers.
@@ -75,7 +99,8 @@ final class Suppressions_Page {
 
 		$this->maybe_handle_bulk();
 
-		$this->list_table->prepare_items();
+		$list_table = $this->list_table();
+		$list_table->prepare_items();
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only notice flag on a capability-gated page.
 		$notice = isset( $_GET['notice'] ) ? sanitize_text_field( wp_unslash( (string) $_GET['notice'] ) ) : '';
 
@@ -103,8 +128,8 @@ final class Suppressions_Page {
 			<h2 class="title"><?php esc_html_e( 'Suppressed addresses', 'leastudios-email-templates' ); ?></h2>
 			<form method="POST" action="<?php echo esc_url( admin_url( 'admin.php?page=leastudios-email-templates-suppressions' ) ); ?>">
 				<?php
-				$this->list_table->search_box( __( 'Search', 'leastudios-email-templates' ), 'suppression-search' );
-				$this->list_table->display();
+				$list_table->search_box( __( 'Search', 'leastudios-email-templates' ), 'suppression-search' );
+				$list_table->display();
 				?>
 			</form>
 		</div>
@@ -168,7 +193,7 @@ final class Suppressions_Page {
 	 * @return void
 	 */
 	private function maybe_handle_bulk(): void {
-		$action = $this->list_table->current_action();
+		$action = $this->list_table()->current_action();
 
 		if ( false === $action || 'remove' !== $action ) {
 			return;
@@ -188,13 +213,8 @@ final class Suppressions_Page {
 			return;
 		}
 
-		$repo = $this->list_table_repo();
-		if ( null === $repo ) {
-			return;
-		}
-
 		foreach ( $ids as $id ) {
-			$entry = $repo->find_by_id( $id );
+			$entry = $this->repo->find_by_id( $id );
 			if ( null !== $entry ) {
 				$this->manager->unsuppress( $entry->email );
 			}
@@ -205,29 +225,6 @@ final class Suppressions_Page {
 		// page callback called before headers are sent.
 		wp_safe_redirect( $this->redirect_url( 'removed' ) );
 		exit;
-	}
-
-	/**
-	 * Reach into the list table to borrow its injected repository.
-	 *
-	 * Suppressions_Page itself only receives the Unsubscribe_Manager — the
-	 * repository sits behind the list table. We don't have a clean accessor,
-	 * so this helper exists for the bulk path and is the one place where
-	 * the indirection bites.
-	 *
-	 * @return \LEAStudios\EmailTemplates\Database\Suppression_Repository|null
-	 */
-	private function list_table_repo(): ?\LEAStudios\EmailTemplates\Database\Suppression_Repository {
-		// Reflection avoids exposing the repo property publicly on the list table.
-		$ref = new \ReflectionObject( $this->list_table );
-		if ( ! $ref->hasProperty( 'repo' ) ) {
-			return null;
-		}
-		$prop = $ref->getProperty( 'repo' );
-		$prop->setAccessible( true );
-		$repo = $prop->getValue( $this->list_table );
-
-		return $repo instanceof \LEAStudios\EmailTemplates\Database\Suppression_Repository ? $repo : null;
 	}
 
 	/**
