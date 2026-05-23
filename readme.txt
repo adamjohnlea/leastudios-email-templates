@@ -1,64 +1,83 @@
 === leaStudios Email Templates ===
 Contributors: leastudios
-Tags: email templates, branded emails, payment emails, transactional emails, email design
+Tags: email templates, branded emails, payment emails, transactional emails, unsubscribe
 Requires at least: 6.4
 Tested up to: 6.9
-Requires PHP: 8.2
+Requires PHP: 8.1
 Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Branded email templates for all WordPress emails plus payment transactional emails.
+Branded HTML wrapper for every outgoing WordPress email, plus a transactional pipeline for leaStudios Payments with full unsubscribe / suppression support.
 
 == Description ==
 
-leaStudios Email Templates wraps all outgoing WordPress emails in a branded HTML template and adds transactional email support for leaStudios Payments events.
+leaStudios Email Templates does three things:
 
-**Key features:**
+1. Wraps every outgoing HTML `wp_mail()` in a branded base template (logo, primary color, footer, social links). Bypass per-message via the `X-LeaStudios-No-Template` header.
+2. Dispatches transactional emails for leaStudios Payments order, subscription, payment-failure, and refund events.
+3. Adds compliant opt-out support — HMAC-signed unsubscribe URLs, public landing pages, admin management, and a suppression gate that lets recipients quietly opt out of non-required mail while continuing to receive legally-required transactional messages (receipts, refunds, payment-failure alerts, renewal receipts).
 
-* **Branded email wrapping** — all HTML emails sent via `wp_mail()` are automatically wrapped in a professional, responsive template with your logo, brand colour, and footer.
-* **Payment transactional emails** — automatic emails for payment receipts, subscription confirmations, subscription renewals, payment failures, and refund notifications.
-* **Customisable per email type** — enable/disable each email type, customise the subject line and body content with merge tags, or override the recipient for testing.
-* **Branding settings** — upload your logo, set a primary colour, add footer text, and configure social media links.
-* **Live preview** — preview your branded template from the admin before any emails are sent.
-* **Merge tags** — dynamic content like `{customer_name}`, `{amount}`, `{product_name}`, `{date}`, and more.
-* **Opt-out header** — any plugin can bypass the template for specific emails by adding an `X-LeaStudios-No-Template` header.
+The plugin runs standalone. Without leaStudios Payments installed, the wrapper, send log, plain-text alternative body, and opt-out machinery all still work.
 
-**Payment email types:**
+= Features =
 
-* Payment Receipt — sent when a checkout is completed.
-* Subscription Created — sent when a new subscription is activated.
-* Subscription Renewed — sent on successful renewal payments.
-* Payment Failed — sent when a subscription payment fails.
-* Refund Processed — sent when a refund is issued.
-
-**Works with or without leaStudios Mailer:**
-
-When leaStudios Mailer is active, the template wrapping hooks into the mailer's pipeline for maximum compatibility. When the mailer is not active, it falls back to WordPress's `wp_mail` filter.
-
-== Installation ==
-
-1. Upload the `leastudios-email-templates` folder to `/wp-content/plugins/`.
-2. Activate the plugin through the Plugins menu in WordPress.
-3. Go to Email Templates in the admin menu to configure your branding (logo, colour, footer).
-4. Optionally customise individual email types under the Email Types tab.
-5. If leaStudios Payments is active, payment emails will be sent automatically on checkout, subscription, and refund events.
+* Branded wrapper for every outgoing HTML email
+* Transactional emails for leaStudios Payments events
+* Per-type preview + send-test from the admin
+* Send log with filterable list, retention prune cron, and CLI inspection
+* Plain-text alternative body for every HTML send
+* Light + dark theme variants
+* Per-tag escape contract (html / raw / url modes)
+* Third-party email-type registry
+* WP-CLI subcommands for every surface
+* HMAC-signed unsubscribe links with public landing pages
+* Per-recipient suppression with admin management
+* Auto-appended unsubscribe footer on non-required types
+* Required-type bypass for receipts, refunds, payment-failure alerts, renewal receipts
 
 == Frequently Asked Questions ==
 
-= Does this require leaStudios Payments? =
+= Does this plugin work without leaStudios Payments installed? =
 
-No. The branded template wrapping works on all WordPress emails regardless of other plugins. The payment transactional emails only activate when leaStudios Payments is installed and active.
+Yes. The branded wrapper, send log, plain-text alternative body, opt-out machinery, and admin pages all run independently. The payment-driven transactional emails (`payment_receipt`, `subscription_created`, `subscription_renewed`, `payment_failed`, `refund_processed`) only dispatch when `LEASTUDIOS_PAYMENTS_VERSION` is defined, and the integration degrades gracefully when the sibling plugin is inactive.
 
-= Can I disable the template for specific emails? =
+= Does this plugin support unsubscribes? =
 
-Yes. Add the header `X-LeaStudios-No-Template: true` to any `wp_mail()` call and the email will be sent without the branded wrapper.
+Yes. Every non-required transactional email gets an auto-appended unsubscribe footer with a unique HMAC-signed link. Clicking the link suppresses that address immediately (one-click GET to `/wp-json/leastudios-email-templates/v1/unsubscribe`). The post-unsubscribe landing page offers a one-click resubscribe form (POST to `/resubscribe`). Required types — payment receipts, refund confirmations, payment-failure alerts, and renewal receipts — bypass the suppression gate so legally-required mail continues to flow regardless of opt-out state.
 
-= Does this work with emails from other plugins? =
+= How do I rotate the HMAC unsubscribe secret? =
 
-Yes. Any plugin that sends HTML emails via `wp_mail()` will have its emails wrapped in your branded template.
+Delete the `leastudios_email_templates_unsubscribe_secret` option. A new secret is minted lazily on the next `Unsubscribe_Manager::url_for()` call. Rotating the secret invalidates every outstanding unsubscribe link. Alternatively, hook the `leastudios_email_templates_unsubscribe_token_secret` filter to source the secret from a constant or environment variable — when the filter returns a non-empty string the option is never touched.
+
+= How do I disable the auto-appended unsubscribe footer? =
+
+Hook the `leastudios_email_templates_unsubscribe_footer_html` filter and return an empty string. The filter receives `(string $default_html, string $to, string $type_id)` so you can disable selectively per type or recipient.
+
+= How do I expose this plugin's email types to my own plugin? =
+
+Hook `leastudios_email_templates_register_types` at file scope (before `plugins_loaded:10` fires) and register your own `Email_Type_Definition` implementations. Your type appears in the Email Types tab, the send log, the WP-CLI subcommands, and the suppression gate — for free.
 
 == Changelog ==
 
-= 1.0.0 =
-* Initial release.
+= 1.1.0 — 2026-05-23 =
+
+* Added: per-type preview + send-test from the admin Email Types tab
+* Added: send log with filterable admin list, retention prune cron, and CLI inspection
+* Added: plain-text alternative body for every transactional HTML send
+* Added: light + dark theme variants for the email base template
+* Added: per-tag escape contract — merge tags declare html / raw / url modes
+* Added: third-party email-type registry via the `leastudios_email_templates_register_types` action
+* Added: WP-CLI subcommands — list-types, preview, send-test, list-suppressions, add-suppression, remove-suppression
+* Added: unsubscribe / suppression — HMAC-signed URLs, public REST landing pages, admin management, auto-appended footer on non-required types
+* Changed: PHPStan baseline raised to level 7
+
+= 1.0.0 — Initial release =
+
+* Branded HTML wrapper for every outgoing `wp_mail()`
+* Transactional emails for leaStudios Payments order, subscription, payment-failure, and refund events
+
+== Upgrade Notice ==
+
+= 1.1.0 =
+Adds a suppression / unsubscribe gate: non-required transactional types (e.g., subscription_created) now skip recipients who have opted out via the auto-appended footer link. Required types (receipts, refunds, payment-failure, renewal receipts) bypass the gate. Review the new Email Templates → Suppressions admin page after upgrade.
