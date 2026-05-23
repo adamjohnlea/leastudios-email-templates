@@ -1,5 +1,6 @@
 /.github
 /bin
+/docs
 /node_modules
 /tests
 .distignore
@@ -8,4 +9,5 @@ composer.json
 composer.lock
 phpcs.xml.dist
 phpstan.neon
+phpstan-bootstrap.php
 phpunit.xml.dist
