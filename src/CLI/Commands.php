@@ -388,4 +388,107 @@ class Commands {
 
 		return $rows;
 	}
+
+	/**
+	 * Add a suppression for the given email address.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <email>
+	 * : Recipient email address to suppress.
+	 *
+	 * [--source=<source>]
+	 * : Source marker for the new row.
+	 * ---
+	 * default: cli
+	 * ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp leastudios-email-templates add-suppression jane@example.com
+	 *     wp leastudios-email-templates add-suppression jane@example.com --source=migration
+	 *
+	 * @param array<int, string>    $args       Positional arguments: [0] => email.
+	 * @param array<string, string> $assoc_args Associative arguments.
+	 * @return void
+	 */
+	public function add_suppression( array $args, array $assoc_args ): void {
+		$email  = (string) ( $args[0] ?? '' );
+		$source = (string) ( $assoc_args['source'] ?? 'cli' );
+
+		$this->dispatch_add_suppression( $email, $source );
+
+		\WP_CLI::success( sprintf( 'Suppressed %s (source=%s).', $email, $source ) );
+	}
+
+	/**
+	 * Validate args and write the suppression row. Pure-logic helper that
+	 * tests can call without going through the WP_CLI loggers.
+	 *
+	 * @param string $email  Recipient email.
+	 * @param string $source Source marker.
+	 * @return void
+	 */
+	public function dispatch_add_suppression( string $email, string $source ): void {
+		if ( ! is_email( $email ) ) {
+			\WP_CLI::error( sprintf( '"%s" is not a valid email address.', $email ) );
+			// WP_CLI::error throws in tests via the stub; in production it exits.
+			return;
+		}
+
+		$this->manager->suppress( $email, $source );
+	}
+
+	/**
+	 * Remove a suppression for the given email address.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <email>
+	 * : Recipient email address to un-suppress.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp leastudios-email-templates remove-suppression jane@example.com
+	 *
+	 * @param array<int, string>    $args       Positional arguments: [0] => email.
+	 * @param array<string, string> $assoc_args Associative arguments.
+	 * @return void
+	 */
+	public function remove_suppression( array $args, array $assoc_args ): void {
+		unset( $assoc_args );
+		$email = (string) ( $args[0] ?? '' );
+
+		$result = $this->dispatch_remove_suppression( $email );
+
+		if ( $result['existed'] ) {
+			\WP_CLI::success( sprintf( 'Removed suppression for %s.', $email ) );
+		} else {
+			\WP_CLI::warning( sprintf( '%s was not suppressed.', $email ) );
+		}
+	}
+
+	/**
+	 * Validate args and remove the suppression row. Pure-logic helper that
+	 * tests can call without going through the WP_CLI loggers.
+	 *
+	 * Distinguishes "removed an existing row" from "address was not suppressed"
+	 * via the returned `existed` flag so the user-facing command can surface a
+	 * different success/warning message.
+	 *
+	 * @param string $email Recipient email.
+	 * @return array{existed:bool}
+	 */
+	public function dispatch_remove_suppression( string $email ): array {
+		if ( ! is_email( $email ) ) {
+			\WP_CLI::error( sprintf( '"%s" is not a valid email address.', $email ) );
+			// WP_CLI::error throws in tests via the stub; in production it exits.
+			return [ 'existed' => false ];
+		}
+
+		$existed = $this->manager->is_suppressed( $email );
+		$this->manager->unsuppress( $email );
+
+		return [ 'existed' => $existed ];
+	}
 }

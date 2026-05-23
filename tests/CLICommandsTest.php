@@ -212,4 +212,48 @@ class CLICommandsTest extends TestCase {
 
 		$this->commands->dispatch_send_test( 'nope_does_not_exist', 'support@example.test', false );
 	}
+
+	public function test_dispatch_add_suppression_rejects_garbage_email(): void {
+		$this->expectException( \RuntimeException::class );
+		$this->expectExceptionMessageMatches( '/not a valid email/i' );
+
+		$this->commands->dispatch_add_suppression( 'not-an-email', 'cli' );
+	}
+
+	public function test_dispatch_add_suppression_writes_row(): void {
+		$this->commands->dispatch_add_suppression( 'jane@example.com', 'cli' );
+
+		$this->assertTrue( $this->manager->is_suppressed( 'jane@example.com' ) );
+	}
+
+	public function test_dispatch_add_suppression_records_source(): void {
+		$this->commands->dispatch_add_suppression( 'jane@example.com', 'migration' );
+
+		$rows = $this->commands->build_suppression_rows();
+		$this->assertCount( 1, $rows );
+		$this->assertSame( 'jane@example.com', $rows[0]['email'] );
+		$this->assertSame( 'migration', $rows[0]['source'] );
+	}
+
+	public function test_dispatch_remove_suppression_returns_false_when_absent(): void {
+		$result = $this->commands->dispatch_remove_suppression( 'never@example.com' );
+
+		$this->assertFalse( $result['existed'] );
+	}
+
+	public function test_dispatch_remove_suppression_returns_true_when_present(): void {
+		$this->manager->suppress( 'jane@example.com', 'link' );
+
+		$result = $this->commands->dispatch_remove_suppression( 'jane@example.com' );
+
+		$this->assertTrue( $result['existed'] );
+		$this->assertFalse( $this->manager->is_suppressed( 'jane@example.com' ) );
+	}
+
+	public function test_dispatch_remove_suppression_rejects_garbage_email(): void {
+		$this->expectException( \RuntimeException::class );
+		$this->expectExceptionMessageMatches( '/not a valid email/i' );
+
+		$this->commands->dispatch_remove_suppression( 'not-an-email' );
+	}
 }
