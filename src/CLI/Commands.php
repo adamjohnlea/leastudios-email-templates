@@ -16,6 +16,7 @@ use LEAStudios\EmailTemplates\Email\Email_Sender;
 use LEAStudios\EmailTemplates\Email\Email_Type_Registry;
 use LEAStudios\EmailTemplates\Email\Merge_Tag_Replacer;
 use LEAStudios\EmailTemplates\Email\Template_Wrapper;
+use LEAStudios\EmailTemplates\Subscription\Unsubscribe_Manager;
 
 /**
  * Manage and inspect leastudios-email-templates from the command line.
@@ -42,11 +43,13 @@ class Commands {
 	 * @param Email_Type_Registry $registry Type registry.
 	 * @param Email_Sender        $sender   Email sender.
 	 * @param Merge_Tag_Replacer  $replacer Merge-tag replacer (used by preview).
+	 * @param Unsubscribe_Manager $manager  Suppression facade for Phase 9 commands.
 	 */
 	public function __construct(
 		private readonly Email_Type_Registry $registry,
 		private readonly Email_Sender $sender,
 		private readonly Merge_Tag_Replacer $replacer,
+		private readonly Unsubscribe_Manager $manager,
 	) {}
 
 	/**
@@ -322,5 +325,67 @@ class Commands {
 			'subject' => '',
 			'body'    => '',
 		];
+	}
+
+	/**
+	 * List all suppressed email addresses.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--format=<format>]
+	 * : Render output in a particular format.
+	 * ---
+	 * default: table
+	 * options:
+	 *   - table
+	 *   - csv
+	 *   - json
+	 *   - yaml
+	 *   - count
+	 *   - ids
+	 * ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp leastudios-email-templates list-suppressions
+	 *     wp leastudios-email-templates list-suppressions --format=json
+	 *
+	 * @param array<int, string>    $args       Positional arguments.
+	 * @param array<string, string> $assoc_args Associative arguments.
+	 * @return void
+	 */
+	public function list_suppressions( array $args, array $assoc_args ): void {
+		unset( $args );
+		$format = $assoc_args['format'] ?? 'table';
+
+		\WP_CLI\Utils\format_items(
+			$format,
+			$this->build_suppression_rows(),
+			[ 'email', 'suppressed_at', 'source' ]
+		);
+	}
+
+	/**
+	 * Return one row per suppressed address — used by `list-suppressions`
+	 * and by tests. Public so the data shape can be asserted without
+	 * mocking the WP_CLI output.
+	 *
+	 * @return array<int, array{email:string, suppressed_at:string, source:string}>
+	 */
+	public function build_suppression_rows(): array {
+		// 1000 is a generous ceiling — the page is filterable from the admin
+		// side; the CLI list is for support/ops, not bulk export.
+		$page = $this->manager->paginate( [], 1000, 1 );
+
+		$rows = [];
+		foreach ( $page['rows'] as $entry ) {
+			$rows[] = [
+				'email'         => $entry->email,
+				'suppressed_at' => $entry->suppressed_at,
+				'source'        => $entry->source,
+			];
+		}
+
+		return $rows;
 	}
 }

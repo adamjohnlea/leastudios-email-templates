@@ -26,6 +26,7 @@ class CLICommandsTest extends TestCase {
 	private Email_Type_Registry $registry;
 	private Email_Sender $sender;
 	private Merge_Tag_Replacer $replacer;
+	private \LEAStudios\EmailTemplates\Subscription\Unsubscribe_Manager $manager;
 	private Commands $commands;
 
 	public function set_up(): void {
@@ -40,10 +41,10 @@ class CLICommandsTest extends TestCase {
 		$suppression_repo = new \LEAStudios\EmailTemplates\Database\Suppression_Repository();
 		$suppression_repo->install();
 		$suppression_repo->delete_all();
-		$manager = new \LEAStudios\EmailTemplates\Subscription\Unsubscribe_Manager( $suppression_repo );
+		$this->manager = new \LEAStudios\EmailTemplates\Subscription\Unsubscribe_Manager( $suppression_repo );
 
-		$this->sender   = new Email_Sender( $this->replacer, $this->registry, $manager );
-		$this->commands = new Commands( $this->registry, $this->sender, $this->replacer );
+		$this->sender   = new Email_Sender( $this->replacer, $this->registry, $this->manager );
+		$this->commands = new Commands( $this->registry, $this->sender, $this->replacer, $this->manager );
 	}
 
 	public function test_build_type_rows_returns_one_row_per_registered_type(): void {
@@ -97,13 +98,35 @@ class CLICommandsTest extends TestCase {
 
 		$registry = new Email_Type_Registry();
 		$registry->register( $stub );
-		$commands = new Commands( $registry, $this->sender, $this->replacer );
+		$commands = new Commands( $registry, $this->sender, $this->replacer, $this->manager );
 
 		$rows = $commands->build_type_rows();
 
 		$this->assertCount( 1, $rows );
 		$this->assertSame( 'third-party', $rows[0]['source'] );
 		$this->assertSame( 'my_custom_type', $rows[0]['id'] );
+	}
+
+	public function test_build_suppression_rows_returns_email_date_source(): void {
+		$repo = new \LEAStudios\EmailTemplates\Database\Suppression_Repository();
+		delete_option( 'leastudios_email_templates_suppressions_schema_version' );
+		$repo->install();
+		$repo->delete_all();
+		$repo->upsert( 'one@example.com', 'link' );
+		$repo->upsert( 'two@example.com', 'admin' );
+
+		$manager  = new \LEAStudios\EmailTemplates\Subscription\Unsubscribe_Manager( $repo );
+		$commands = new \LEAStudios\EmailTemplates\CLI\Commands(
+			$this->registry,
+			$this->sender,
+			$this->replacer,
+			$manager
+		);
+
+		$rows = $commands->build_suppression_rows();
+
+		$this->assertCount( 2, $rows );
+		$this->assertSame( [ 'email', 'suppressed_at', 'source' ], array_keys( $rows[0] ) );
 	}
 
 	public function test_render_preview_returns_subject_and_wrapped_html(): void {

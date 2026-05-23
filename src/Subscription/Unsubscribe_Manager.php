@@ -117,6 +117,19 @@ final class Unsubscribe_Manager {
 	}
 
 	/**
+	 * Paginate the suppression list — exposed on the facade so CLI/admin
+	 * consumers don't have to construct their own `Suppression_Repository`.
+	 *
+	 * @param array<string, mixed> $filters  Optional filter spec passed through to the repository.
+	 * @param int                  $per_page Items per page.
+	 * @param int                  $page     1-based page index.
+	 * @return array{rows: array<int, \LEAStudios\EmailTemplates\Database\Suppression_Entry>, total: int}
+	 */
+	public function paginate( array $filters, int $per_page, int $page ): array {
+		return $this->repo->paginate( $filters, $per_page, $page );
+	}
+
+	/**
 	 * Generate the URL-safe token for an email.
 	 *
 	 * @param string $email Recipient email.
