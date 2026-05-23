@@ -152,12 +152,12 @@ class CLICommandsTest extends TestCase {
 	}
 
 	public function test_dispatch_send_test_dry_run_does_not_log(): void {
-		// Same isolation rationale as the test above.
-		remove_all_actions( 'leastudios_email_templates_email_sent' );
+		// The dry-run path never calls Email_Sender::send(), so no _email_sent
+		// action fires and no logger writes a row. We still install/clear the
+		// table so the row count assertion is meaningful.
 		$repo = new \LEAStudios\EmailTemplates\Database\Email_Log_Repository();
 		$repo->install();
 		$repo->delete_all();
-		( new \LEAStudios\EmailTemplates\Log\Send_Logger( $repo ) )->init();
 
 		$result = $this->commands->dispatch_send_test( 'payment_receipt', 'support@example.test', true );
 
