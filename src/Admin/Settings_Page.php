@@ -12,6 +12,7 @@ namespace LEAStudios\EmailTemplates\Admin;
 // Prevent direct access.
 defined( 'ABSPATH' ) || exit;
 
+use LEAStudios\EmailTemplates\Database\Suppression_Repository;
 use LEAStudios\EmailTemplates\Email\Email_Sender;
 use LEAStudios\EmailTemplates\Email\Email_Type_Definition;
 use LEAStudios\EmailTemplates\Email\Email_Type_Registry;
@@ -19,6 +20,7 @@ use LEAStudios\EmailTemplates\Email\Merge_Tag_Replacer;
 use LEAStudios\EmailTemplates\Email\Template_Wrapper;
 use LEAStudios\EmailTemplates\Email\Theme;
 use LEAStudios\EmailTemplates\Security\Nonce;
+use LEAStudios\EmailTemplates\Subscription\Unsubscribe_Manager;
 
 /**
  * Registers and renders the plugin settings page.
@@ -588,7 +590,7 @@ class Settings_Page {
 			wp_send_json_error( __( 'A valid email address is required.', 'leastudios-email-templates' ) );
 		}
 
-		$sender = new Email_Sender( new Merge_Tag_Replacer(), $this->registry );
+		$sender = new Email_Sender( new Merge_Tag_Replacer(), $this->registry, new Unsubscribe_Manager( new Suppression_Repository() ) );
 		$result = $sender->send( $definition->id(), $to, $definition->sample_context() );
 
 		if ( ! $result ) {

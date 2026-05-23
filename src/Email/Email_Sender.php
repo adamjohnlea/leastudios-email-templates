@@ -12,6 +12,8 @@ namespace LEAStudios\EmailTemplates\Email;
 // Prevent direct access.
 defined( 'ABSPATH' ) || exit;
 
+use LEAStudios\EmailTemplates\Subscription\Unsubscribe_Manager;
+
 /**
  * Composes and sends emails for any type registered in Email_Type_Registry.
  */
@@ -36,10 +38,12 @@ class Email_Sender {
 	 *
 	 * @param Merge_Tag_Replacer  $replacer The merge tag replacer.
 	 * @param Email_Type_Registry $registry The type registry.
+	 * @param Unsubscribe_Manager $manager  The unsubscribe / suppression manager.
 	 */
 	public function __construct(
 		private readonly Merge_Tag_Replacer $replacer,
 		private readonly Email_Type_Registry $registry,
+		private readonly Unsubscribe_Manager $manager,
 	) {}
 
 	/**
@@ -59,6 +63,11 @@ class Email_Sender {
 
 		if ( null === $definition ) {
 			return false;
+		}
+
+		// Phase 9 — suppression gate. Required types bypass.
+		if ( ! $definition->is_transactional_required() && '' !== $to && $this->manager->is_suppressed( $to ) ) {
+			return $this->fire_suppressed( $type_id, $to, $context, $source );
 		}
 
 		$composed = $this->compose( $type_id, $context );
@@ -129,9 +138,12 @@ class Email_Sender {
 	 *
 	 * @param string               $type_id Registered email type id.
 	 * @param array<string, mixed> $context Merge-tag values.
+	 * @param string               $to      Recipient address. Reserved for use
+	 *                                      by Task 7 (unsubscribe_url injection);
+	 *                                      currently unused inside compose().
 	 * @return array{subject:string, body:string, headers:array<int,string>}|null
 	 */
-	public function compose( string $type_id, array $context = [] ): ?array {
+	public function compose( string $type_id, array $context = [], string $to = '' ): ?array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- $to is wired in Task 7 of the Phase 9 plan.
 		$definition = $this->registry->get( $type_id );
 
 		if ( null === $definition ) {
@@ -196,5 +208,71 @@ class Email_Sender {
 		$settings = $this->type_settings_cache[ $type_id ] ?? [];
 
 		return array_merge( $defaults, $settings );
+	}
+
+	/**
+	 * Append the unsubscribe footer to the body of a non-required send.
+	 * Temporary stub — Task 8 of the Phase 9 plan replaces this with the
+	 * real implementation.
+	 *
+	 * @param string $to      Recipient.
+	 * @param string $type_id Registered type id.
+	 * @return string HTML to append.
+	 */
+	private function render_unsubscribe_footer( string $to, string $type_id ): string {
+		unset( $to, $type_id );
+		return '';
+	}
+
+	/**
+	 * Compose the would-have-been email, fire the suppressed action, and
+	 * return false. The composed body intentionally includes both the
+	 * `{unsubscribe_url}` substitution (resolved by compose) and the
+	 * auto-appended footer — so the log row is byte-identical to what
+	 * would have been sent.
+	 *
+	 * @param string               $type_id Registered type id.
+	 * @param string               $to      Recipient address.
+	 * @param array<string, mixed> $context Merge-tag values.
+	 * @param string               $source  Send-origin marker.
+	 * @return bool Always false.
+	 */
+	private function fire_suppressed( string $type_id, string $to, array $context, string $source ): bool {
+		$composed = $this->compose( $type_id, $context, $to );
+
+		if ( null === $composed ) {
+			// Type is disabled in settings; still fire so callers can observe.
+			$composed = [
+				'subject' => '',
+				'body'    => '',
+				'headers' => [ 'Content-Type: text/html; charset=UTF-8' ],
+			];
+		} else {
+			$composed['body'] .= $this->render_unsubscribe_footer( $to, $type_id );
+		}
+
+		/**
+		 * Fires when a send is gated by an active suppression. The body and
+		 * headers reflect what would have been sent (including the auto-
+		 * appended footer), so the log row is a faithful audit trail.
+		 *
+		 * @param string             $type_id The registered type id.
+		 * @param string             $to      The recipient.
+		 * @param string             $subject The composed subject.
+		 * @param string             $body    The composed body (with footer).
+		 * @param array<int, string> $headers The composed headers.
+		 * @param string             $source  Send-origin marker.
+		 */
+		do_action(
+			'leastudios_email_templates_email_suppressed',
+			$type_id,
+			$to,
+			(string) $composed['subject'],
+			(string) $composed['body'],
+			(array) $composed['headers'],
+			$source
+		);
+
+		return false;
 	}
 }

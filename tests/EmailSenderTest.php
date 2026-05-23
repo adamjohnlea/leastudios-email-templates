@@ -26,6 +26,10 @@ class EmailSenderTest extends TestCase {
 
 	private Email_Sender $sender;
 
+	private \LEAStudios\EmailTemplates\Database\Suppression_Repository $suppression_repo;
+
+	private \LEAStudios\EmailTemplates\Subscription\Unsubscribe_Manager $manager;
+
 	public function set_up(): void {
 		parent::set_up();
 
@@ -36,7 +40,18 @@ class EmailSenderTest extends TestCase {
 		$registry->register( new Payment_Failed() );
 		$registry->register( new Refund_Processed() );
 
-		$this->sender = new Email_Sender( new Merge_Tag_Replacer(), $registry );
+		// Force a fresh install each test — the schema-version option is
+		// cached in wp_alloptions across tests, so the install() short-circuit
+		// would otherwise skip recreating the table after a transactional
+		// rollback nukes it.
+		delete_option( 'leastudios_email_templates_suppressions_schema_version' );
+		$this->suppression_repo = new \LEAStudios\EmailTemplates\Database\Suppression_Repository();
+		$this->suppression_repo->install();
+		$this->suppression_repo->delete_all();
+		delete_option( 'leastudios_email_templates_unsubscribe_secret' );
+		$this->manager = new \LEAStudios\EmailTemplates\Subscription\Unsubscribe_Manager( $this->suppression_repo );
+
+		$this->sender = new Email_Sender( new Merge_Tag_Replacer(), $registry, $this->manager );
 
 		reset_phpmailer_instance();
 	}
@@ -270,5 +285,64 @@ class EmailSenderTest extends TestCase {
 		);
 
 		$this->assertSame( 'cli-test', $captured );
+	}
+
+	public function test_non_required_type_send_to_suppressed_recipient_is_skipped(): void {
+		$this->manager->suppress( 'jane@example.com', 'link' );
+
+		$mail_called = false;
+		add_filter(
+			'pre_wp_mail',
+			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- $value is the pre_wp_mail signature, not used here.
+			static function ( $value ) use ( &$mail_called ) {
+				$mail_called = true;
+				return false;
+			}
+		);
+
+		$suppressed_args = null;
+		add_action(
+			'leastudios_email_templates_email_suppressed',
+			static function ( $type_id, $to, $subject, $body, $headers, $source ) use ( &$suppressed_args ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- compact() reads each variable by name.
+				$suppressed_args = compact( 'type_id', 'to', 'subject', 'body', 'headers', 'source' );
+			},
+			10,
+			6
+		);
+
+		$result = $this->sender->send( 'subscription_created', 'jane@example.com', [ 'customer_name' => 'Jane' ], 'web' );
+
+		remove_all_filters( 'pre_wp_mail' );
+		remove_all_actions( 'leastudios_email_templates_email_suppressed' );
+
+		$this->assertFalse( $result, 'send must return false when gated' );
+		$this->assertFalse( $mail_called, 'wp_mail must NOT be invoked when suppressed' );
+		$this->assertNotNull( $suppressed_args, '_email_suppressed must fire' );
+		$this->assertSame( 'subscription_created', $suppressed_args['type_id'] );
+		$this->assertSame( 'jane@example.com', $suppressed_args['to'] );
+		$this->assertSame( 'web', $suppressed_args['source'] );
+		$this->assertNotSame( '', $suppressed_args['subject'], 'logged subject must be the composed value' );
+		$this->assertNotSame( '', $suppressed_args['body'], 'logged body must be the composed value' );
+	}
+
+	public function test_required_type_send_to_suppressed_recipient_still_sends(): void {
+		$this->manager->suppress( 'jane@example.com', 'link' );
+
+		$mail_called = false;
+		add_filter(
+			'pre_wp_mail',
+			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- $value is the pre_wp_mail signature, not used here.
+			static function ( $value ) use ( &$mail_called ) {
+				$mail_called = true;
+				return true; // Short-circuit wp_mail successfully.
+			}
+		);
+
+		$result = $this->sender->send( 'payment_receipt', 'jane@example.com', [ 'customer_name' => 'Jane' ], 'web' );
+
+		remove_all_filters( 'pre_wp_mail' );
+
+		$this->assertTrue( $result, 'required-type send must bypass the gate' );
+		$this->assertTrue( $mail_called );
 	}
 }

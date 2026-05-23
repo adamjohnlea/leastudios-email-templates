@@ -15,6 +15,8 @@ defined( 'ABSPATH' ) || exit;
 use LEAStudios\EmailTemplates\Admin\Email_Log_Page;
 use LEAStudios\EmailTemplates\Admin\Settings_Page;
 use LEAStudios\EmailTemplates\Database\Email_Log_Repository;
+use LEAStudios\EmailTemplates\Database\Suppression_Repository;
+use LEAStudios\EmailTemplates\Subscription\Unsubscribe_Manager;
 use LEAStudios\EmailTemplates\Email\Built_In\Payment_Failed;
 use LEAStudios\EmailTemplates\Email\Built_In\Payment_Receipt;
 use LEAStudios\EmailTemplates\Email\Built_In\Refund_Processed;
@@ -100,8 +102,15 @@ final class Plugin {
 		 */
 		do_action( 'leastudios_email_templates_register_types', $registry );
 
+		// Unsubscribe / suppression manager. Task 16 of the Phase 9 plan will
+		// fully wire the REST + admin surfaces; for now the manager is wired
+		// solely so Email_Sender can gate non-required sends to suppressed
+		// recipients.
+		$suppression_repo = new Suppression_Repository();
+		$unsubscribe      = new Unsubscribe_Manager( $suppression_repo );
+
 		// Email sender for transactional emails.
-		$sender = new Email_Sender( $replacer, $registry );
+		$sender = new Email_Sender( $replacer, $registry, $unsubscribe );
 
 		// Register WP-CLI commands. Guarded so the class is only required when
 		// the CLI is actually running, keeping the autoload graph quiet for

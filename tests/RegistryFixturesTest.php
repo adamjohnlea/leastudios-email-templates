@@ -96,7 +96,13 @@ class RegistryFixturesTest extends TestCase {
 		$registry = new Email_Type_Registry();
 		$registry->register( new Fake_Welcome() );
 
-		$sender = new Email_Sender( new Merge_Tag_Replacer(), $registry );
+		delete_option( 'leastudios_email_templates_suppressions_schema_version' );
+		$suppression_repo = new \LEAStudios\EmailTemplates\Database\Suppression_Repository();
+		$suppression_repo->install();
+		$suppression_repo->delete_all();
+		$manager = new \LEAStudios\EmailTemplates\Subscription\Unsubscribe_Manager( $suppression_repo );
+
+		$sender = new Email_Sender( new Merge_Tag_Replacer(), $registry, $manager );
 
 		$result = $sender->send( 'fake_welcome', 'jane@example.com', [ 'customer_name' => 'Jane' ] );
 

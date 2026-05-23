@@ -22,6 +22,12 @@ class SuppressionRepositoryTest extends TestCase {
 
 	public function set_up(): void {
 		parent::set_up();
+		// Force a fresh install each test — the autoload=true schema-version
+		// option can survive transactional rollback in the wp_alloptions
+		// runtime cache, which would otherwise make install() short-circuit
+		// before re-creating the (temporary) table after the prior test
+		// rolled it back.
+		delete_option( 'leastudios_email_templates_suppressions_schema_version' );
 		$this->repo = new Suppression_Repository();
 		$this->repo->install();
 		$this->repo->delete_all();

@@ -35,7 +35,14 @@ class CLICommandsTest extends TestCase {
 		$this->registry->register( new Payment_Receipt() );
 		$this->registry->register( new Subscription_Created() );
 		$this->replacer = new Merge_Tag_Replacer();
-		$this->sender   = new Email_Sender( $this->replacer, $this->registry );
+
+		delete_option( 'leastudios_email_templates_suppressions_schema_version' );
+		$suppression_repo = new \LEAStudios\EmailTemplates\Database\Suppression_Repository();
+		$suppression_repo->install();
+		$suppression_repo->delete_all();
+		$manager = new \LEAStudios\EmailTemplates\Subscription\Unsubscribe_Manager( $suppression_repo );
+
+		$this->sender   = new Email_Sender( $this->replacer, $this->registry, $manager );
 		$this->commands = new Commands( $this->registry, $this->sender, $this->replacer );
 	}
 
