@@ -13,17 +13,18 @@ Read those before doing anything non-trivial here. Do not duplicate them.
 
 ## What this plugin does
 
-Two responsibilities, glued together by `src/Plugin.php`:
+Three responsibilities, glued together by `src/Plugin.php`:
 
 1. **Branded wrapper for every outgoing HTML email.** `Email/Template_Wrapper` inserts `wp_mail()` body into `templates/email/base.php` along with branding options (logo, primary colour, footer, social links). Wrapping is bypassed when the email has an `X-LeaStudios-No-Template` header or when branding is disabled.
 2. **Payment transactional emails.** `Payment/Payment_Email_Listener` subscribes to actions fired by `leastudios-payments` (`leastudios_payments_order_created`, `…subscription_synced`, `…subscription_invoice_paid`, `…subscription_payment_failed`, `…webhook_refund_processed`, `…refund_issued`) and dispatches one of five built-in transactional email types (`payment_receipt`, `subscription_created`, `subscription_renewed`, `payment_failed`, `refund_processed`) via `Email_Sender`.
+3. **Opt-out / suppression (Phase 9).** `Subscription/Unsubscribe_Manager` mints HMAC-signed unsubscribe URLs and consults a per-recipient `wp_leastudios_email_templates_suppressions` table. `Email_Sender::send` short-circuits non-required-type sends to suppressed recipients via the `leastudios_email_templates_email_suppressed` action; required types (receipts, refunds, payment-failed, renewal receipts) bypass the gate so legally-required mail still flows. `REST/Unsubscribe_Controller` exposes `GET /unsubscribe` (one-click) and `POST /resubscribe` for the public landing pages; `Admin/Suppressions_Page` is the admin/support surface.
 
-The payment integration only boots when `LEASTUDIOS_PAYMENTS_VERSION` is defined (`Plugin::is_payments_active()`). When the payments plugin is inactive, the wrapper still runs.
+The payment integration only boots when `LEASTUDIOS_PAYMENTS_VERSION` is defined (`Plugin::is_payments_active()`). When the payments plugin is inactive, the wrapper and the suppression machinery still run.
 
 ## Architecture map
 
 - **`leastudios-email-templates.php`** — plugin header, constants (`LEASTUDIOS_EMAIL_TEMPLATES_VERSION/_FILE/_DIR/_URL`), activation hook seeds `leastudios_email_templates_branding` defaults, vendor-autoload guard with admin notice, then `Plugin::init()` on `plugins_loaded`.
-- **`src/Plugin.php`** — composition root. Instantiates `Merge_Tag_Replacer`, wires `Template_Wrapper` (always), `Payment_Email_Listener` (conditionally), and `Settings_Page` (admin only).
+- **`src/Plugin.php`** — composition root. Instantiates `Merge_Tag_Replacer`, installs the log + suppression schemas, wires `Template_Wrapper` (always), `Send_Logger` (always), `Unsubscribe_Manager` (always — shared across `Email_Sender`, the REST controller, the CLI, and the admin page so all surfaces see the same HMAC secret and DB state), `Unsubscribe_Controller` (on `rest_api_init`), the WP-CLI commands (when running under WP-CLI), `Payment_Email_Listener` (conditionally), and the three admin pages — `Settings_Page`, `Email_Log_Page`, and `Suppressions_Page` (admin only).
 - **`src/Email/Email_Type_Definition.php`** — interface every email type must implement (`id`, `label`, `default_subject`, `default_body`, `available_tags`, `escape_map`, `sample_context`, `is_transactional_required`).
 - **`src/Email/Abstract_Email_Type.php`** — base class providing default `escape_map()` projection (from `available_tags()`) and `is_transactional_required(): false`. Extend this for new types unless you have a reason to implement the interface directly.
 - **`src/Email/Email_Type_Registry.php`** — in-memory `id => Email_Type_Definition` map with `register/get/has/all`. Last-write-wins on duplicate ids so third parties can replace built-ins.
@@ -37,13 +38,25 @@ The payment integration only boots when `LEASTUDIOS_PAYMENTS_VERSION` is defined
   - **Refund dedupe**: `on_refund_processed` (webhook) and `on_refund_issued` (admin REST refund) can both fire for the same refund. `send_refund_email()` uses a 10-minute transient keyed by `order_id + refunded_amount` to dedupe. The amount is part of the key so a partial-then-full refund sends two distinct emails.
 - **`src/Payment/Payment_Data_Resolver.php`** — talks to `LEAStudios\Payments\Database\Order_Repository` and `Subscription_Repository` (sibling plugin classes) to produce the merge-tag context arrays.
 - **`src/Admin/Settings_Page.php`** — Settings menu page (`manage_options`), tabs for branding + per-email-type overrides, AJAX live preview via `wp_ajax_leastudios_email_templates_preview`.
-- **`src/CLI/Commands.php`** — WP-CLI commands. Registered only when `defined('WP_CLI') && WP_CLI`, via three explicit per-method `add_command` calls in `Plugin::init` (`list-types`, `preview`, `send-test`). The class is constructor-injected with the registry, sender, and replacer that `Plugin::init` already builds, so the CLI cannot drift from admin AJAX. `preview` calls `Email_Sender::compose()`; `send-test` calls `Email_Sender::send($type, $to, $context, 'cli-test')` so the log row is tagged.
+- **`src/CLI/Commands.php`** — WP-CLI commands. Registered only when `defined('WP_CLI') && WP_CLI`, via six explicit per-method `add_command` calls in `Plugin::init` (`list-types`, `preview`, `send-test`, `list-suppressions`, `add-suppression`, `remove-suppression`). Constructor-injected with the registry, sender, replacer, and unsubscribe manager that `Plugin::init` already builds, so the CLI cannot drift from admin AJAX. `preview` calls `Email_Sender::compose()`; `send-test` calls `Email_Sender::send($type, $to, $context, 'cli-test')` so the log row is tagged. Each user-facing command delegates to a pure `dispatch_*` helper so tests can exercise the validation/dispatch path without mocking the WP-CLI loggers.
+- **`src/Subscription/Unsubscribe_Manager.php`** — stateless HMAC-SHA256 token mint/verify (`url_for`, `verify_token`) plus a thin facade over `Suppression_Repository` for `suppress`/`unsuppress`/`is_suppressed`. Tokens have the form `<base64url(email)>.<hex-hmac>`; verification is constant-time via `hash_equals`. No expiry, no single-use — rotating the secret invalidates every outstanding token. The secret is generated lazily on first use, stored in option `leastudios_email_templates_unsubscribe_secret` (autoload=no). Filter `leastudios_email_templates_unsubscribe_token_secret` lets sites source the secret from a constant or env var.
+- **`src/Database/Suppression_Repository.php`** — `$wpdb` wrapper for the suppressions table. `UNIQUE` index on `email` + `INSERT … ON DUPLICATE KEY UPDATE` make re-suppression idempotent. Email is normalized to `strtolower(trim(...))` at both insert and lookup time so case-variant addresses dedupe correctly. `install()` is idempotent and short-circuits on the schema-version option.
+- **`src/REST/Unsubscribe_Controller.php`** — anonymous-permission routes `GET /unsubscribe` and `POST /resubscribe` under namespace `leastudios-email-templates/v1`. **The token IS the auth** — `permission_callback` returns `true` and the route handler runs `Unsubscribe_Manager::verify_token`, returning the error landing on any failure. A `rest_pre_serve_request` listener short-circuits JSON serialization so the HTML landing pages land raw with proper `Content-Type`, no-cache, and `X-Robots-Tag: noindex` headers.
+- **`src/Admin/Suppressions_Page.php`** + **`src/Admin/Suppressions_List_Table.php`** — admin sub-page under "Email Templates" with `manage_options` capability. Add form (admin-post), paginated list, per-row Remove link, and bulk Remove via the standard `WP_List_Table::current_action()` POST pattern. The list table is constructor-injected with `Suppression_Repository`.
 
 ### Options
 
 - `leastudios_email_templates_branding` — assoc array: `enabled`, `logo_url`, `primary_color`, `footer_text`, `social_links{twitter,facebook,linkedin,instagram}`. Seeded on activation.
 - `leastudios_email_templates_emails` — assoc array keyed by registered type id (e.g. `payment_receipt`) → `{enabled, subject, body, recipient_override}`. Empty by default; the registered definition's defaults are used when a key is missing or blank. Keys are byte-stable across Phase 7 — pre-Phase-7 customer overrides continue to apply.
+- `leastudios_email_templates_unsubscribe_secret` — autoload **no**. 64-char HMAC key minted on first `Unsubscribe_Manager::url_for(...)`. Rotating = deleting the option, which invalidates every outstanding unsubscribe link. Filter `leastudios_email_templates_unsubscribe_token_secret` to source from a constant or env var instead (in which case nothing is ever persisted to the DB).
+- `leastudios_email_templates_suppressions_schema_version` — autoload yes; mirrors the log table's schema-version short-circuit. Starts at `1.0.0`.
 - **`wp_leastudios_email_templates_log.source`** (varchar(16), default `'web'`) — added in schema 1.1.0. Values: `'web'` (admin/wp-mail-filter triggered) or `'cli-test'` (`wp ... send-test`). Surfaced in the admin log list table as a small `(cli)` badge next to the recipient when non-default.
+- **`wp_leastudios_email_templates_log.status`** also accepts the value `'suppressed'` (no schema change — column is already `varchar(16)`). One row is written per gated send, body included, so the audit trail matches what would have been delivered.
+
+### Database tables
+
+- **`wp_leastudios_email_templates_log`** (schema 1.1.0) — one row per transactional send. Dropped on uninstall via `Email_Log_Repository::drop()`.
+- **`wp_leastudios_email_templates_suppressions`** (schema 1.0.0) — `id`, `email` (UNIQUE), `suppressed_at`, `source` (`'link'` | `'admin'` | `'cli'`). One row per opted-out address. Dropped on uninstall via `Suppression_Repository::drop()`.
 
 ### Public extension points
 
@@ -51,6 +64,10 @@ The payment integration only boots when `LEASTUDIOS_PAYMENTS_VERSION` is defined
 - Filter `leastudios_email_templates_template_path` — override the wrapper template file.
 - Filter `leastudios_email_templates_send_args` — mutate `wp_mail()` args before send. Second arg is `string $type_id`.
 - Action `leastudios_email_templates_email_sent` — fires after each transactional send. Args: `string $type_id, string $to, string $subject, bool $result, string $body, array $headers, string $source`. `$source` is `'web'` for admin/auto sends, `'cli-test'` for `wp ... send-test`.
+- Action `leastudios_email_templates_email_suppressed` — fires when `Email_Sender::send` skips a non-required-type send because the recipient is suppressed. Args: `string $type_id, string $to, string $subject, string $body, array $headers, string $source`. `Send_Logger` writes one log row per fire with `status='suppressed'`. The body includes the auto-appended unsubscribe footer so the row matches what would have been sent.
+- Filter `leastudios_email_templates_unsubscribe_url` — `(string $url, string $email, string $type_id) => string`. Rewrite the unsubscribe URL (e.g. route through a CDN). Resolves to empty for required-type sends and empty recipients.
+- Filter `leastudios_email_templates_unsubscribe_footer_html` — `(string $default_html, string $to, string $type_id) => string`. Replace the auto-appended footer markup for non-required types.
+- Filter `leastudios_email_templates_unsubscribe_token_secret` — `(string $secret) => string`. Source the HMAC secret from a constant or env var rather than the `wp_option`. Returning non-empty skips the option entirely (the secret is never written to the DB in that mode).
 - Header `X-LeaStudios-No-Template` — any plugin can set this on a `wp_mail()` headers array/string to skip the wrapper for that one email.
 
 ## Cross-plugin coupling (important)
@@ -88,6 +105,8 @@ The `tests/TestCase.php` base class is local to this plugin — extend it for ne
 `composer.json` pins `config.platform.php` to 8.2 — the floor for this plugin.
 
 ## When adding a new transactional email type
+
+By default a new built-in or third-party type is **suppression-eligible** (`is_transactional_required(): false`) — meaning it will be skipped for recipients who have unsubscribed. Override to `true` only when the email is legally required and must always be sent regardless of opt-out (receipts, refunds, payment-failure alerts, renewal receipts).
 
 For a new built-in type (one that ships in this plugin):
 
