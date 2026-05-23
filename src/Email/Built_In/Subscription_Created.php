@@ -103,7 +103,7 @@ final class Subscription_Created extends Abstract_Email_Type {
 				'escape'      => Escape_Mode::HTML,
 			],
 			'{period_end}'     => [
-				'description' => __( 'Current period end date', 'leastudios-email-templates' ),
+				'description' => __( 'Next billing date', 'leastudios-email-templates' ),
 				'escape'      => Escape_Mode::HTML,
 			],
 		];
