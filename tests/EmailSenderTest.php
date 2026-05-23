@@ -220,4 +220,55 @@ class EmailSenderTest extends TestCase {
 	public function test_compose_returns_null_for_unknown_type_id(): void {
 		$this->assertNull( $this->sender->compose( 'does_not_exist', [] ) );
 	}
+
+	public function test_send_defaults_source_to_web_in_email_sent_action(): void {
+		$captured = null;
+		add_action(
+			'leastudios_email_templates_email_sent',
+			static function ( $type_id, $to, $subject, $result, $body, $headers, $source ) use ( &$captured ): void {
+				$captured = $source;
+			},
+			10,
+			7
+		);
+
+		$this->sender->send(
+			'payment_receipt',
+			'buyer@example.test',
+			[
+				'order_id'      => '12345',
+				'amount'        => 4999,
+				'customer_name' => 'Test Buyer',
+				'product_name'  => 'Test Product',
+			]
+		);
+
+		$this->assertSame( 'web', $captured );
+	}
+
+	public function test_send_propagates_explicit_source_to_email_sent_action(): void {
+		$captured = null;
+		add_action(
+			'leastudios_email_templates_email_sent',
+			static function ( $type_id, $to, $subject, $result, $body, $headers, $source ) use ( &$captured ): void {
+				$captured = $source;
+			},
+			10,
+			7
+		);
+
+		$this->sender->send(
+			'payment_receipt',
+			'buyer@example.test',
+			[
+				'order_id'      => '12345',
+				'amount'        => 4999,
+				'customer_name' => 'Test Buyer',
+				'product_name'  => 'Test Product',
+			],
+			'cli-test'
+		);
+
+		$this->assertSame( 'cli-test', $captured );
+	}
 }

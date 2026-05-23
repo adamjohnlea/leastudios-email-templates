@@ -48,10 +48,13 @@ class Email_Sender {
 	 * @param string               $type_id The registered email type id.
 	 * @param string               $to      Recipient address.
 	 * @param array<string, mixed> $context Merge-tag values.
+	 * @param string               $source  Send-origin marker for the log table.
+	 *                                      `'web'` (default) for admin AJAX sends,
+	 *                                      `'cli-test'` for `wp leastudios-email-templates send-test`.
 	 * @return bool Whether wp_mail returned true. Returns false if the id is
 	 *              unknown or the type is disabled.
 	 */
-	public function send( string $type_id, string $to, array $context = [] ): bool {
+	public function send( string $type_id, string $to, array $context = [], string $source = 'web' ): bool {
 		$definition = $this->registry->get( $type_id );
 
 		if ( null === $definition ) {
@@ -100,6 +103,7 @@ class Email_Sender {
 		 * @param bool               $result  Whether wp_mail returned true.
 		 * @param string             $body    The rendered body that was passed to wp_mail.
 		 * @param array<int, string> $headers The headers passed to wp_mail.
+		 * @param string             $source  Send-origin marker: 'web' or 'cli-test'.
 		 */
 		do_action(
 			'leastudios_email_templates_email_sent',
@@ -108,7 +112,8 @@ class Email_Sender {
 			$args['subject'],
 			$result,
 			(string) $args['message'],
-			(array) $args['headers']
+			(array) $args['headers'],
+			$source
 		);
 
 		return $result;
