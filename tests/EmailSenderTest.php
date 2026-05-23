@@ -529,6 +529,44 @@ class EmailSenderTest extends TestCase {
 		);
 	}
 
+	public function test_unsubscribe_url_is_keyed_to_recipient_override_not_original_to(): void {
+		update_option(
+			'leastudios_email_templates_emails',
+			[
+				'phase9_fixture' => [
+					'enabled'            => true,
+					'subject'            => '',
+					'body'               => '',
+					'recipient_override' => 'ops@example.com',
+				],
+			]
+		);
+		$this->register_phase9_fixture();
+
+		$filter_email = null;
+		add_filter(
+			'leastudios_email_templates_unsubscribe_url',
+			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- filter signature requires all three params.
+			static function ( $url, $email, $type_id ) use ( &$filter_email ): string {
+				$filter_email = $email;
+				return (string) $url;
+			},
+			10,
+			3
+		);
+
+		$this->sender->send( 'phase9_fixture', 'jane@example.com', [], 'web' );
+
+		remove_all_filters( 'leastudios_email_templates_unsubscribe_url' );
+		delete_option( 'leastudios_email_templates_emails' );
+
+		$this->assertSame(
+			'ops@example.com',
+			$filter_email,
+			'{unsubscribe_url} must be minted for the override target, not the original $to'
+		);
+	}
+
 	public function test_gate_evaluates_resolved_delivery_address_when_override_is_set(): void {
 		// Suppress the original $to. Set a recipient_override that is NOT
 		// suppressed. The email must still send to the override target.

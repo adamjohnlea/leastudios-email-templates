@@ -50,7 +50,13 @@ class Email_Sender {
 	 * Send an email of the specified type.
 	 *
 	 * @param string               $type_id The registered email type id.
-	 * @param string               $to      Recipient address.
+	 * @param string               $to      Recipient address. Note: if the
+	 *                                      per-type `recipient_override` setting
+	 *                                      holds a valid email, it silently
+	 *                                      supersedes `$to` for the actual
+	 *                                      wp_mail dispatch, the suppression
+	 *                                      gate, the `{unsubscribe_url}` merge
+	 *                                      tag, and the auto-appended footer.
 	 * @param array<string, mixed> $context Merge-tag values.
 	 * @param string               $source  Send-origin marker for the log table.
 	 *                                      `'web'` (default) for admin AJAX sends,
@@ -144,16 +150,17 @@ class Email_Sender {
 	 * Compose subject/body/headers without sending.
 	 *
 	 * Returns null when the type id is unregistered or the type is disabled.
-	 * Recipient is not part of the composed output — subject/body/headers
-	 * don't depend on it — so previews and settings-page AJAX can call this
-	 * without a real To address.
+	 * The recipient IS reflected in the composed body via the `{unsubscribe_url}`
+	 * merge tag (added in Phase 9): non-required types with a real recipient
+	 * get a signed URL keyed to that address; required types and empty
+	 * recipients get an empty string. Subject and headers don't depend on
+	 * the recipient, so previews and settings-page AJAX can still pass an
+	 * empty `$to` when the rendered URL is irrelevant.
 	 *
 	 * @param string               $type_id Registered email type id.
 	 * @param array<string, mixed> $context Merge-tag values.
-	 * @param string               $to      Recipient address. Used to inject
-	 *                                      the `{unsubscribe_url}` merge tag —
-	 *                                      empty for required types or empty/invalid
-	 *                                      recipients, a real signed URL otherwise.
+	 * @param string               $to      Recipient address used to mint the
+	 *                                      `{unsubscribe_url}` merge tag.
 	 * @return array{subject:string, body:string, headers:array<int,string>}|null
 	 */
 	public function compose( string $type_id, array $context = [], string $to = '' ): ?array {
