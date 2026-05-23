@@ -100,4 +100,26 @@ class SuppressionRepositoryTest extends TestCase {
 		// Re-install so tearDown's delete_all can run.
 		$this->repo->install();
 	}
+
+	public function test_paginate_filters_by_email_substring_with_esc_like(): void {
+		$this->repo->upsert( 'alice@example.com', 'link' );
+		$this->repo->upsert( 'bob@example.com', 'link' );
+		$this->repo->upsert( 'foo_bar@example.com', 'link' );
+
+		// Substring match on a plain literal.
+		$alice_only = $this->repo->paginate( [ 'email' => 'ali' ], 50, 1 );
+		$this->assertSame( 1, $alice_only['total'] );
+		$this->assertSame( 'alice@example.com', $alice_only['rows'][0]->email );
+
+		// The MySQL LIKE wildcard `_` must be escaped via esc_like so that a
+		// filter for "_bar" does NOT match "alice" or "bob" (which would
+		// happen if `_` were treated as a single-character wildcard).
+		$underscore_literal = $this->repo->paginate( [ 'email' => '_bar' ], 50, 1 );
+		$this->assertSame( 1, $underscore_literal['total'] );
+		$this->assertSame( 'foo_bar@example.com', $underscore_literal['rows'][0]->email );
+
+		// Empty filter returns everything.
+		$all = $this->repo->paginate( [], 50, 1 );
+		$this->assertSame( 3, $all['total'] );
+	}
 }

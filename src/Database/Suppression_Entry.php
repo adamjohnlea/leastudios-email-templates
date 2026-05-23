@@ -25,7 +25,7 @@ final class Suppression_Entry {
 	 *
 	 * @param int    $id            Row id.
 	 * @param string $email         Suppressed email (already lowercased).
-	 * @param string $suppressed_at MySQL datetime string in UTC.
+	 * @param string $suppressed_at MySQL datetime string in the site's configured timezone (matches `current_time( 'mysql' )`).
 	 * @param string $source        Origin marker: 'link' | 'admin' | 'cli'.
 	 */
 	public function __construct(
