@@ -17,6 +17,7 @@ use LEAStudios\EmailTemplates\Email\Email_Type;
 use LEAStudios\EmailTemplates\Email\Merge_Tag_Replacer;
 use LEAStudios\EmailTemplates\Email\Sample_Context;
 use LEAStudios\EmailTemplates\Email\Template_Wrapper;
+use LEAStudios\EmailTemplates\Email\Theme;
 use LEAStudios\EmailTemplates\Security\Nonce;
 
 /**
@@ -124,6 +125,11 @@ class Settings_Page {
 		foreach ( $platforms as $platform ) {
 			$sanitized['social_links'][ $platform ] = esc_url_raw( $input['social_links'][ $platform ] ?? '' );
 		}
+
+		$theme_id           = (string) ( $input['theme'] ?? Theme::DEFAULT_ID );
+		$sanitized['theme'] = isset( Theme::available()[ $theme_id ] )
+			? $theme_id
+			: Theme::DEFAULT_ID;
 
 		return $sanitized;
 	}
@@ -278,6 +284,29 @@ class Settings_Page {
 					<th scope="row"><label for="primary-color"><?php esc_html_e( 'Primary Color', 'leastudios-email-templates' ); ?></label></th>
 					<td>
 						<input type="text" id="primary-color" name="<?php echo esc_attr( self::BRANDING_OPTION ); ?>[primary_color]" value="<?php echo esc_attr( $branding['primary_color'] ?? '#4f46e5' ); ?>" class="leastudios-color-picker" />
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="theme"><?php esc_html_e( 'Theme', 'leastudios-email-templates' ); ?></label></th>
+					<td>
+						<?php
+						$selected_theme = (string) ( $branding['theme'] ?? Theme::DEFAULT_ID );
+						?>
+						<select id="theme" name="<?php echo esc_attr( self::BRANDING_OPTION ); ?>[theme]">
+							<?php foreach ( Theme::available() as $theme_id => $theme_label ) : ?>
+								<option value="<?php echo esc_attr( $theme_id ); ?>" <?php selected( $selected_theme, $theme_id ); ?>>
+									<?php echo esc_html( $theme_label ); ?>
+								</option>
+							<?php endforeach; ?>
+						</select>
+						<p class="description">
+							<?php
+							esc_html_e(
+								'Modern Light adapts automatically on email clients that support dark mode (Apple Mail, iOS Mail). Modern Dark is always dark.',
+								'leastudios-email-templates'
+							);
+							?>
+						</p>
 					</td>
 				</tr>
 				<tr>

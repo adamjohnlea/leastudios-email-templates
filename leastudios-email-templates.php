@@ -43,6 +43,7 @@ function leastudios_email_templates_activate(): void {
 			'enabled'       => true,
 			'logo_url'      => '',
 			'primary_color' => '#4f46e5',
+			'theme'         => 'modern-light',
 			'footer_text'   => '',
 			'social_links'  => [
 				'twitter'   => '',
