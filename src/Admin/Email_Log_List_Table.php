@@ -136,7 +136,7 @@ class Email_Log_List_Table extends \WP_List_Table {
 
 		if ( 'web' !== $item->source ) {
 			$html .= sprintf(
-				' <span class="leastudios-source-badge" style="color:#646970;font-size:11px;">(%s)</span>',
+				' <span class="leastudios-email-templates-source-badge" style="color:#646970;font-size:11px;">(%s)</span>',
 				esc_html( 'cli-test' === $item->source ? 'cli' : $item->source )
 			);
 		}
