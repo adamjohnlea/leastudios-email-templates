@@ -4,7 +4,7 @@ Wraps every outgoing WordPress email in a branded HTML template and adds a trans
 
 - **Requires WordPress:** 6.4+
 - **Tested up to:** 6.9
-- **Requires PHP:** 8.1+
+- **Requires PHP:** 8.2+
 - **License:** GPL-2.0-or-later
 
 ## Quick start
@@ -78,7 +78,7 @@ Both tables drop on uninstall.
 ## Compatibility
 
 - WordPress 6.4 minimum; tested up to 6.9.
-- PHP 8.1 minimum (`composer.json` pins `config.platform.php` to 8.2 for CI).
+- PHP 8.2 minimum (matches the runtime guard in the plugin header and `composer.json` `config.platform.php`).
 - Works standalone. The payment transactional emails activate when `LEASTUDIOS_PAYMENTS_VERSION` is defined.
 
 ## Development
