@@ -8,6 +8,7 @@
     },
     "require-dev": {
         "php-stubs/wordpress-stubs": "^6.7",
+        "php-stubs/wp-cli-stubs": "^2.12",
         "phpcompatibility/phpcompatibility-wp": "*",
         "phpcsstandards/phpcsutils": "^1.0",
         "phpstan/extension-installer": "^1.4",

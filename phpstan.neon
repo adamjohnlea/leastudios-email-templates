@@ -12,3 +12,4 @@ parameters:
         - ../leastudios-payments/src
     bootstrapFiles:
         - phpstan-bootstrap.php
+        - vendor/php-stubs/wp-cli-stubs/wp-cli-stubs.php
