@@ -1,0 +1,102 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Scope
+
+This file documents only what is specific to **leastudios-email-templates**. Suite-wide conventions (security checklist, WPCS, PSR-4 layout, shared-by-duplication classes, packaging) live in:
+
+- `/Users/adamlea/Herd/leastudios-plugins/CLAUDE.md` — suite overview, where the code lives, cross-plugin integration model.
+- `wp-content/plugins/leastudios-dev-tools/CLAUDE.md` — the "mother" CLAUDE.md (escape/sanitize/nonce/capability rules, REST/i18n conventions, etc.).
+
+Read those before doing anything non-trivial here. Do not duplicate them.
+
+## What this plugin does
+
+Two responsibilities, glued together by `src/Plugin.php`:
+
+1. **Branded wrapper for every outgoing HTML email.** `Email/Template_Wrapper` inserts `wp_mail()` body into `templates/email/base.php` along with branding options (logo, primary colour, footer, social links). Wrapping is bypassed when the email has an `X-LeaStudios-No-Template` header or when branding is disabled.
+2. **Payment transactional emails.** `Payment/Payment_Email_Listener` subscribes to actions fired by `leastudios-payments` (`leastudios_payments_order_created`, `…subscription_synced`, `…subscription_invoice_paid`, `…subscription_payment_failed`, `…webhook_refund_processed`, `…refund_issued`) and dispatches one of five built-in transactional email types (`payment_receipt`, `subscription_created`, `subscription_renewed`, `payment_failed`, `refund_processed`) via `Email_Sender`.
+
+The payment integration only boots when `LEASTUDIOS_PAYMENTS_VERSION` is defined (`Plugin::is_payments_active()`). When the payments plugin is inactive, the wrapper still runs.
+
+## Architecture map
+
+- **`leastudios-email-templates.php`** — plugin header, constants (`LEASTUDIOS_EMAIL_TEMPLATES_VERSION/_FILE/_DIR/_URL`), activation hook seeds `leastudios_email_templates_branding` defaults, vendor-autoload guard with admin notice, then `Plugin::init()` on `plugins_loaded`.
+- **`src/Plugin.php`** — composition root. Instantiates `Merge_Tag_Replacer`, wires `Template_Wrapper` (always), `Payment_Email_Listener` (conditionally), and `Settings_Page` (admin only).
+- **`src/Email/Email_Type_Definition.php`** — interface every email type must implement (`id`, `label`, `default_subject`, `default_body`, `available_tags`, `escape_map`, `sample_context`, `is_transactional_required`).
+- **`src/Email/Abstract_Email_Type.php`** — base class providing default `escape_map()` projection (from `available_tags()`) and `is_transactional_required(): false`. Extend this for new types unless you have a reason to implement the interface directly.
+- **`src/Email/Email_Type_Registry.php`** — in-memory `id => Email_Type_Definition` map with `register/get/has/all`. Last-write-wins on duplicate ids so third parties can replace built-ins.
+- **`src/Email/Built_In/`** — the five built-in definitions (`Payment_Receipt`, `Subscription_Created`, `Subscription_Renewed`, `Payment_Failed`, `Refund_Processed`), each extending `Abstract_Email_Type` and overriding `is_transactional_required(): true`. Subject/body/tag content is the single source of truth for these types.
+- **`src/Email/Template_Wrapper.php`** — registers `leastudios_mailer_pre_send` (priority 20) when `LEASTUDIOS_MAILER_VERSION` is defined, else falls back to the `wp_mail` filter. Detects HTML content from per-message headers and the `wp_mail_content_type` filter (mirrors core's resolution order — many plugins flip everything to HTML via the filter, so header-only checks miss them).
+- **`src/Email/Email_Sender.php`** — composes and dispatches one email per registered type id. Takes `Email_Type_Registry` in its constructor; `send(string $type_id, ...)` and `compose(string $type_id, ...)` resolve definitions through the registry. Reads per-type overrides from `leastudios_email_templates_emails` option, falling back to the definition's defaults. The option is memoized per-request and invalidated on `update_option_*` / `add_option_*` / `delete_option_*` for the option key, so a batch of refund webhooks doesn't re-query options per send.
+- **`src/Email/Merge_Tag_Replacer.php`** — exposes `replace_html()`, `replace_subject()` (strips CR/LF), and the static `format_amount()` used to render Stripe minor-unit integers as localized currency.
+- **`src/Payment/Payment_Email_Listener.php`** — the hook registrations. Important behaviours:
+  - **`on_subscription_synced`**: only fires `SUBSCRIPTION_CREATED` when the local status is `active`/`trialing` *and* the Stripe `created` timestamp is within 60 seconds. The sync action is replayed for many lifecycle events; this filters to genuinely-new subscriptions.
+  - **`on_invoice_paid`**: only fires `SUBSCRIPTION_RENEWED` for `billing_reason === 'subscription_cycle'` (so the initial invoice does not also trigger a renewal email).
+  - **Refund dedupe**: `on_refund_processed` (webhook) and `on_refund_issued` (admin REST refund) can both fire for the same refund. `send_refund_email()` uses a 10-minute transient keyed by `order_id + refunded_amount` to dedupe. The amount is part of the key so a partial-then-full refund sends two distinct emails.
+- **`src/Payment/Payment_Data_Resolver.php`** — talks to `LEAStudios\Payments\Database\Order_Repository` and `Subscription_Repository` (sibling plugin classes) to produce the merge-tag context arrays.
+- **`src/Admin/Settings_Page.php`** — Settings menu page (`manage_options`), tabs for branding + per-email-type overrides, AJAX live preview via `wp_ajax_leastudios_email_templates_preview`.
+
+### Options
+
+- `leastudios_email_templates_branding` — assoc array: `enabled`, `logo_url`, `primary_color`, `footer_text`, `social_links{twitter,facebook,linkedin,instagram}`. Seeded on activation.
+- `leastudios_email_templates_emails` — assoc array keyed by registered type id (e.g. `payment_receipt`) → `{enabled, subject, body, recipient_override}`. Empty by default; the registered definition's defaults are used when a key is missing or blank. Keys are byte-stable across Phase 7 — pre-Phase-7 customer overrides continue to apply.
+
+### Public extension points
+
+- Action `leastudios_email_templates_register_types` — fires once during `Plugin::init` after built-in types are registered. Receives the `Email_Type_Registry` so third parties can register their own `Email_Type_Definition` implementations. Hook this at file scope in your own plugin (i.e. before `plugins_loaded:10` fires).
+- Filter `leastudios_email_templates_template_path` — override the wrapper template file.
+- Filter `leastudios_email_templates_send_args` — mutate `wp_mail()` args before send. Second arg is `string $type_id`.
+- Action `leastudios_email_templates_email_sent` — fires after each transactional send. First arg is `string $type_id`.
+- Header `X-LeaStudios-No-Template` — any plugin can set this on a `wp_mail()` headers array/string to skip the wrapper for that one email.
+
+## Cross-plugin coupling (important)
+
+`phpstan.neon` scans `../leastudios-payments/src` so PHPStan can resolve `Order_Repository`, `Subscription_Repository`, and the action signatures used in `Payment_Email_Listener`. This is intentional — the integration is a real typed contract, not hidden behind `ignoreErrors`.
+
+Consequences:
+
+- Running `composer phpstan` locally requires the `leastudios-payments` plugin to be checked out at `../leastudios-payments`.
+- The CI `lint` job (`.github/workflows/ci.yml`) explicitly checks out `adamjohnlea/leastudios-payments` alongside this repo for the same reason — do not "fix" that by removing it.
+- The runtime guard against missing classes is `Plugin::is_payments_active()` (which checks `LEASTUDIOS_PAYMENTS_VERSION`). Anything in `src/Payment/` may assume the sibling plugin's classes exist because that path is only reached behind the guard.
+
+## Tests
+
+PHPUnit 9.6 against the WordPress test library — no special harness, just the standard suite layout. `tests/bootstrap.php` looks for `WP_TESTS_DIR` or falls back to `/tmp/wordpress-tests-lib`. Install once per machine using the suite-wide script (see parent CLAUDE.md).
+
+Common runs from this plugin's directory:
+
+```bash
+composer lint                                # phpcs + phpstan
+composer test                                # all tests
+vendor/bin/phpunit --filter MergeTagReplacer # one class
+vendor/bin/phpunit tests/PaymentEmailListenerTest.php
+```
+
+The `tests/TestCase.php` base class is local to this plugin — extend it for new tests.
+
+## CI matrix
+
+`.github/workflows/ci.yml` runs:
+
+- **lint** on PHP 8.2 — checks out `leastudios-payments` for PHPStan (see above).
+- **test** on PHP 8.2 and 8.4 against MySQL 8.0; checks out `leastudios-dev-tools` to run `bin/install-wp-tests.sh` with WP 6.8.2.
+
+`composer.json` pins `config.platform.php` to 8.2 — the floor for this plugin.
+
+## When adding a new transactional email type
+
+For a new built-in type (one that ships in this plugin):
+
+1. Create `src/Email/Built_In/Your_Type.php` extending `Abstract_Email_Type`. Implement `id()`, `label()`, `default_subject()`, `default_body()`, `available_tags()` (each tag carries an `Escape_Mode`), and `sample_context()`. Override `is_transactional_required(): true` if the type is a legally-required transactional email (receipts, refunds, payment failures).
+2. Register the new class in `Plugin::init()` alongside the other five built-ins, before the `leastudios_email_templates_register_types` action fires.
+3. If the type is payment-driven: hook the triggering payment action in `src/Payment/Payment_Email_Listener::init()` and add a handler that calls `$this->sender->send( 'your_type_id', $to, $context )`. Resolve the merge-tag context in `src/Payment/Payment_Data_Resolver.php`.
+4. Extend `tests/BuiltInTypesTest::built_in_provider()` to include the new type. Add listener/resolver tests as needed.
+5. Verify the type appears in the Email Types tab of the settings page and in the log filter dropdown.
+
+For a third-party plugin adding its own type:
+
+1. Implement `Email_Type_Definition` (or extend `Abstract_Email_Type`).
+2. In your own plugin's main file, at file scope, hook `leastudios_email_templates_register_types` and register your definition: `add_action( 'leastudios_email_templates_register_types', fn( $r ) => $r->register( new My_Welcome_Email() ) );`.
+3. Dispatch via `do_action` or by calling `Email_Sender::send( 'my_welcome_email', $to, $context )` from your own code.

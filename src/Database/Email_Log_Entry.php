@@ -23,7 +23,7 @@ final class Email_Log_Entry {
 	 * Constructor.
 	 *
 	 * @param int    $id          Row primary key.
-	 * @param string $type        Email type slug (matches an Email_Type case).
+	 * @param string $type        Email type id (matches a registered Email_Type_Definition).
 	 * @param string $recipient   Recipient email address.
 	 * @param string $subject     Subject line.
 	 * @param string $body        Rendered body HTML/text.
