@@ -218,4 +218,16 @@ class MergeTagReplacerTest extends TestCase {
 		$this->assertStringContainsString( 'https://example.com/wp?x=1', $result );
 		$this->assertStringContainsString( '&#038;y=2', $result );
 	}
+
+	public function test_unsubscribe_url_is_url_escaped_globally(): void {
+		$replacer = new \LEAStudios\EmailTemplates\Email\Merge_Tag_Replacer();
+		$html     = '<a href="{unsubscribe_url}">opt out</a>';
+
+		$result = $replacer->replace_html(
+			$html,
+			[ 'unsubscribe_url' => 'javascript:alert(1)' ]
+		);
+
+		$this->assertStringNotContainsString( 'javascript:', $result, 'must strip dangerous schemes via esc_url' );
+	}
 }

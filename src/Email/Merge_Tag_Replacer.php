@@ -159,13 +159,18 @@ class Merge_Tag_Replacer {
 	/**
 	 * Escape modes for the replacer's built-in global tags.
 	 *
+	 * Includes `unsubscribe_url`, which is a recipient-aware near-global tag
+	 * injected into the context by Email_Sender (so Merge_Tag_Replacer stays
+	 * recipient-ignorant).
+	 *
 	 * @return array<string, Escape_Mode>
 	 */
 	private function get_global_escape_modes(): array {
 		return [
-			'site_name' => Escape_Mode::HTML,
-			'site_url'  => Escape_Mode::URL,
-			'date'      => Escape_Mode::HTML,
+			'site_name'       => Escape_Mode::HTML,
+			'site_url'        => Escape_Mode::URL,
+			'date'            => Escape_Mode::HTML,
+			'unsubscribe_url' => Escape_Mode::URL,
 		];
 	}
 
