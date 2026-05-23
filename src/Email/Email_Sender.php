@@ -129,7 +129,7 @@ class Email_Sender {
 		$body    = '' !== $settings['body'] ? $settings['body'] : $type->default_body();
 
 		$subject = $this->replacer->replace_subject( $subject, $context );
-		$body    = $this->replacer->replace_html( $body, $context );
+		$body    = $this->replacer->replace_html( $body, $context, $type->escape_map() );
 
 		return [
 			'subject' => $subject,

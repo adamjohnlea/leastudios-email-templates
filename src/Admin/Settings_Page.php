@@ -541,7 +541,7 @@ class Settings_Page {
 		}
 
 		$rendered_subject = $replacer->replace_subject( $subject_tpl, $sample );
-		$rendered_body    = $replacer->replace_html( $body_tpl, $sample );
+		$rendered_body    = $replacer->replace_html( $body_tpl, $sample, $type->escape_map() );
 
 		$html = $wrapper->wrap( $rendered_body );
 
