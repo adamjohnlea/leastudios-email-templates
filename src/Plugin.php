@@ -72,7 +72,11 @@ final class Plugin {
 			}
 		);
 
-		// Email sender for transactional emails.
+		// Type registry — populated with built-ins and then opened up to
+		// third parties via the leastudios_email_templates_register_types
+		// action. Third parties must register their callback at file scope
+		// in their own plugin (i.e. before plugins_loaded:10 fires) for
+		// their types to appear in the admin UI on first render.
 		$registry = new Email_Type_Registry();
 		$registry->register( new Payment_Receipt() );
 		$registry->register( new Subscription_Created() );
@@ -80,6 +84,22 @@ final class Plugin {
 		$registry->register( new Payment_Failed() );
 		$registry->register( new Refund_Processed() );
 
+		/**
+		 * Fires once during Plugin::init, after built-in email types are
+		 * registered. Third-party plugins call $registry->register() to
+		 * add their own Email_Type_Definition implementations.
+		 *
+		 * Hook this at file scope in your own plugin (i.e. before
+		 * plugins_loaded:10 fires) so your callback is queued in time
+		 * to receive the registry. Registrations made after Plugin::init
+		 * has completed are still accepted by the registry but will not
+		 * appear in admin UI surfaces that render once per page load.
+		 *
+		 * @param Email_Type_Registry $registry The registry to mutate.
+		 */
+		do_action( 'leastudios_email_templates_register_types', $registry );
+
+		// Email sender for transactional emails.
 		$sender = new Email_Sender( $replacer, $registry );
 
 		// Payment integration (only when payments plugin is active).
