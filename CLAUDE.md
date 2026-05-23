@@ -37,18 +37,20 @@ The payment integration only boots when `LEASTUDIOS_PAYMENTS_VERSION` is defined
   - **Refund dedupe**: `on_refund_processed` (webhook) and `on_refund_issued` (admin REST refund) can both fire for the same refund. `send_refund_email()` uses a 10-minute transient keyed by `order_id + refunded_amount` to dedupe. The amount is part of the key so a partial-then-full refund sends two distinct emails.
 - **`src/Payment/Payment_Data_Resolver.php`** — talks to `LEAStudios\Payments\Database\Order_Repository` and `Subscription_Repository` (sibling plugin classes) to produce the merge-tag context arrays.
 - **`src/Admin/Settings_Page.php`** — Settings menu page (`manage_options`), tabs for branding + per-email-type overrides, AJAX live preview via `wp_ajax_leastudios_email_templates_preview`.
+- **`src/CLI/Commands.php`** — WP-CLI commands. Registered only when `defined('WP_CLI') && WP_CLI`, via three explicit per-method `add_command` calls in `Plugin::init` (`list-types`, `preview`, `send-test`). The class is constructor-injected with the registry, sender, and replacer that `Plugin::init` already builds, so the CLI cannot drift from admin AJAX. `preview` calls `Email_Sender::compose()`; `send-test` calls `Email_Sender::send($type, $to, $context, 'cli-test')` so the log row is tagged.
 
 ### Options
 
 - `leastudios_email_templates_branding` — assoc array: `enabled`, `logo_url`, `primary_color`, `footer_text`, `social_links{twitter,facebook,linkedin,instagram}`. Seeded on activation.
 - `leastudios_email_templates_emails` — assoc array keyed by registered type id (e.g. `payment_receipt`) → `{enabled, subject, body, recipient_override}`. Empty by default; the registered definition's defaults are used when a key is missing or blank. Keys are byte-stable across Phase 7 — pre-Phase-7 customer overrides continue to apply.
+- **`wp_leastudios_email_templates_log.source`** (varchar(16), default `'web'`) — added in schema 1.1.0. Values: `'web'` (admin/wp-mail-filter triggered) or `'cli-test'` (`wp ... send-test`). Surfaced in the admin log list table as a small `(cli)` badge next to the recipient when non-default.
 
 ### Public extension points
 
 - Action `leastudios_email_templates_register_types` — fires once during `Plugin::init` after built-in types are registered. Receives the `Email_Type_Registry` so third parties can register their own `Email_Type_Definition` implementations. Hook this at file scope in your own plugin (i.e. before `plugins_loaded:10` fires).
 - Filter `leastudios_email_templates_template_path` — override the wrapper template file.
 - Filter `leastudios_email_templates_send_args` — mutate `wp_mail()` args before send. Second arg is `string $type_id`.
-- Action `leastudios_email_templates_email_sent` — fires after each transactional send. First arg is `string $type_id`.
+- Action `leastudios_email_templates_email_sent` — fires after each transactional send. Args: `string $type_id, string $to, string $subject, bool $result, string $body, array $headers, string $source`. `$source` is `'web'` for admin/auto sends, `'cli-test'` for `wp ... send-test`.
 - Header `X-LeaStudios-No-Template` — any plugin can set this on a `wp_mail()` headers array/string to skip the wrapper for that one email.
 
 ## Cross-plugin coupling (important)
@@ -100,3 +102,5 @@ For a third-party plugin adding its own type:
 1. Implement `Email_Type_Definition` (or extend `Abstract_Email_Type`).
 2. In your own plugin's main file, at file scope, hook `leastudios_email_templates_register_types` and register your definition: `add_action( 'leastudios_email_templates_register_types', fn( $r ) => $r->register( new My_Welcome_Email() ) );`.
 3. Dispatch via `do_action` or by calling `Email_Sender::send( 'my_welcome_email', $to, $context )` from your own code.
+
+A third-party type registered via `leastudios_email_templates_register_types` works with the CLI for free: `wp ... list-types` will list it (tagged `third-party`), and `preview`/`send-test` accept its id like any other.
