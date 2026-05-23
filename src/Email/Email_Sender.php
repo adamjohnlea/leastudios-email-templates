@@ -101,6 +101,13 @@ class Email_Sender {
 			$context
 		);
 
+		// Phase 9 — auto-append the unsubscribe footer for non-required types
+		// with a real recipient. Required types and empty recipients skip
+		// this; the wrapper (Template_Wrapper) downstream stays type-ignorant.
+		if ( ! $definition->is_transactional_required() && '' !== $to && is_email( $to ) ) {
+			$args['message'] .= $this->render_unsubscribe_footer( $to, $type_id );
+		}
+
 		$result = wp_mail( $args['to'], $args['subject'], $args['message'], $args['headers'] );
 
 		/**
@@ -245,17 +252,37 @@ class Email_Sender {
 	}
 
 	/**
-	 * Append the unsubscribe footer to the body of a non-required send.
-	 * Temporary stub — Task 8 of the Phase 9 plan replaces this with the
-	 * real implementation.
+	 * Default unsubscribe footer HTML for non-required types. Filterable.
+	 *
+	 * Visually distinct from the type's body content — small, muted, with
+	 * the URL pre-resolved (NOT a merge tag, so it's safe even if a
+	 * third-party type strips its context).
 	 *
 	 * @param string $to      Recipient.
 	 * @param string $type_id Registered type id.
-	 * @return string HTML to append.
+	 * @return string HTML to append to the body.
 	 */
 	private function render_unsubscribe_footer( string $to, string $type_id ): string {
-		unset( $to, $type_id );
-		return '';
+		$url = $this->manager->url_for( $to );
+
+		// translators: 1: opening <a> tag with href, 2: closing </a>.
+		$template = esc_html__( 'Don\'t want to receive these emails? %1$sUnsubscribe%2$s.', 'leastudios-email-templates' );
+		$copy     = sprintf(
+			$template,
+			'<a href="' . esc_url( $url ) . '" style="color:#6b7280;">',
+			'</a>'
+		);
+
+		$default = '<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0 12px;"><p style="color:#6b7280;font-size:12px;line-height:1.5;margin:0;">' . $copy . '</p>';
+
+		/**
+		 * Filters the unsubscribe footer HTML auto-appended to non-required emails.
+		 *
+		 * @param string $default Default footer markup.
+		 * @param string $to      Recipient.
+		 * @param string $type_id Registered type id.
+		 */
+		return (string) apply_filters( 'leastudios_email_templates_unsubscribe_footer_html', $default, $to, $type_id );
 	}
 
 	/**

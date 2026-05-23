@@ -452,4 +452,85 @@ class EmailSenderTest extends TestCase {
 		$this->assertNotNull( $composed );
 		$this->assertStringContainsString( 'example.com/opt-out', (string) $composed['body'] );
 	}
+
+	public function test_auto_footer_appended_for_non_required_type(): void {
+		add_filter(
+			'pre_wp_mail',
+			static function ( $value, $atts ): bool {
+				global $captured_body;
+				$captured_body = $atts['message'];
+				return true;
+			},
+			10,
+			2
+		);
+
+		$this->sender->send( 'subscription_created', 'jane@example.com', [ 'customer_name' => 'Jane' ], 'web' );
+
+		remove_all_filters( 'pre_wp_mail' );
+
+		global $captured_body;
+		$this->assertStringContainsString( 'unsubscribe', strtolower( (string) $captured_body ), 'footer must be appended' );
+		// Accept either pretty permalinks or default ?rest_route form (matches Task 7's flexibility).
+		$pretty = '/wp-json/leastudios-email-templates/v1/unsubscribe';
+		$ugly   = 'leastudios-email-templates%2Fv1%2Funsubscribe';
+		$this->assertTrue(
+			str_contains( (string) $captured_body, $pretty ) || str_contains( (string) $captured_body, $ugly ),
+			'footer must contain the REST unsubscribe URL'
+		);
+	}
+
+	public function test_auto_footer_NOT_appended_for_required_type(): void {
+		add_filter(
+			'pre_wp_mail',
+			static function ( $value, $atts ): bool {
+				global $captured_body;
+				$captured_body = $atts['message'];
+				return true;
+			},
+			10,
+			2
+		);
+
+		$this->sender->send( 'payment_receipt', 'jane@example.com', [ 'customer_name' => 'Jane' ], 'web' );
+
+		remove_all_filters( 'pre_wp_mail' );
+
+		global $captured_body;
+		$pretty = '/wp-json/leastudios-email-templates/v1/unsubscribe';
+		$ugly   = 'leastudios-email-templates%2Fv1%2Funsubscribe';
+		$this->assertFalse(
+			str_contains( (string) $captured_body, $pretty ) || str_contains( (string) $captured_body, $ugly ),
+			'payment_receipt (required) must NOT include the unsubscribe URL via the auto-footer'
+		);
+	}
+
+	public function test_unsubscribe_footer_html_filter_applied(): void {
+		add_filter(
+			'leastudios_email_templates_unsubscribe_footer_html',
+			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- filter signature requires all three params.
+			static fn ( $html, $to, $type_id ): string => '<!--FOOTER:' . esc_html( $to ) . '-->',
+			10,
+			3
+		);
+
+		add_filter(
+			'pre_wp_mail',
+			static function ( $value, $atts ): bool {
+				global $captured_body;
+				$captured_body = $atts['message'];
+				return true;
+			},
+			10,
+			2
+		);
+
+		$this->sender->send( 'subscription_created', 'jane@example.com', [ 'customer_name' => 'Jane' ], 'web' );
+
+		remove_all_filters( 'leastudios_email_templates_unsubscribe_footer_html' );
+		remove_all_filters( 'pre_wp_mail' );
+
+		global $captured_body;
+		$this->assertStringContainsString( '<!--FOOTER:jane@example.com-->', (string) $captured_body );
+	}
 }
