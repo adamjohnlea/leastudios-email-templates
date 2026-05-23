@@ -26,6 +26,12 @@ class SendLoggerTest extends TestCase {
 		$this->repo = new Email_Log_Repository();
 		$this->repo->install();
 		$this->repo->delete_all();
+		// Plugin::init() registers a Send_Logger against both actions globally
+		// when the plugin file loads. Strip those so each test starts with a
+		// clean slate and only the locally-constructed $this->logger sees the
+		// actions it subscribes to in the test body.
+		remove_all_actions( 'leastudios_email_templates_email_sent' );
+		remove_all_actions( 'leastudios_email_templates_email_suppressed' );
 		$this->logger = new Send_Logger( $this->repo );
 	}
 
@@ -120,5 +126,35 @@ class SendLoggerTest extends TestCase {
 
 		$first = array_values( $callbacks )[0];
 		$this->assertSame( 7, $first['accepted_args'] );
+	}
+
+	public function test_suppressed_action_writes_log_row_with_suppressed_status(): void {
+		$logger = new \LEAStudios\EmailTemplates\Log\Send_Logger( $this->repo );
+		$logger->init();
+
+		do_action(
+			'leastudios_email_templates_email_suppressed',
+			'subscription_created',
+			'jane@example.com',
+			'Welcome',
+			'<p>body</p>',
+			[ 'Content-Type: text/html; charset=UTF-8' ],
+			'web'
+		);
+
+		$page = $this->repo->paginate( [], 50, 1 );
+
+		$this->assertSame( 1, $page['total'] );
+		$row = $page['rows'][0];
+		$this->assertSame( 'subscription_created', $row->type );
+		$this->assertSame( 'jane@example.com', $row->recipient );
+		$this->assertSame( 'Welcome', $row->subject );
+		$this->assertSame( '<p>body</p>', $row->body );
+		$this->assertSame( 'suppressed', $row->status );
+		// Email_Log_Entry coerces the nullable DB column to string; null reads back as ''.
+		$this->assertSame( '', $row->error );
+		$this->assertSame( 'web', $row->source );
+
+		remove_all_actions( 'leastudios_email_templates_email_suppressed' );
 	}
 }

@@ -39,6 +39,7 @@ class Send_Logger {
 	 */
 	public function init(): void {
 		add_action( 'leastudios_email_templates_email_sent', [ $this, 'record' ], 10, 7 );
+		add_action( 'leastudios_email_templates_email_suppressed', [ $this, 'record_suppressed' ], 10, 6 );
 	}
 
 	/**
@@ -62,6 +63,36 @@ class Send_Logger {
 				'body'      => $body,
 				'headers'   => implode( "\n", $headers ),
 				'status'    => $result ? 'sent' : 'failed',
+				'error'     => null,
+				'source'    => $source,
+			]
+		);
+	}
+
+	/**
+	 * Record a send that was skipped because the recipient is suppressed.
+	 *
+	 * Body/headers reflect what would have been sent (including the
+	 * auto-appended unsubscribe footer) so the row is a faithful audit
+	 * trail of the would-have-been delivery.
+	 *
+	 * @param string             $type_id The registered email type id.
+	 * @param string             $to      The intended recipient.
+	 * @param string             $subject The composed subject line.
+	 * @param string             $body    The composed body (with footer).
+	 * @param array<int, string> $headers The composed headers.
+	 * @param string             $source  Send-origin marker.
+	 * @return void
+	 */
+	public function record_suppressed( string $type_id, string $to, string $subject, string $body, array $headers, string $source ): void {
+		$this->repo->create(
+			[
+				'type'      => $type_id,
+				'recipient' => $to,
+				'subject'   => $subject,
+				'body'      => $body,
+				'headers'   => implode( "\n", $headers ),
+				'status'    => 'suppressed',
 				'error'     => null,
 				'source'    => $source,
 			]
