@@ -119,8 +119,8 @@ class Email_Log_Repository {
 		global $wpdb;
 		$table = $this->table_name();
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id ) );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE id = %d', $table, $id ) );
 
 		return $row instanceof \stdClass ? Email_Log_Entry::from_row( $row ) : null;
 	}
@@ -159,24 +159,26 @@ class Email_Log_Repository {
 		$where_sql = implode( ' AND ', $where );
 		$offset    = max( 0, ( $page - 1 ) * $per_page );
 
-		// Table name and WHERE clause are built from internal vocabulary
-		// (constant filter keys mapping to '%s' placeholders), so the SQL
-		// remains parameterised even though the WHERE clause itself is
-		// interpolated. Table name is the wpdb prefix + a fixed string.
+		// The WHERE clause is built from internal vocabulary (constant filter
+		// keys mapping to '%s' placeholders), so the SQL remains parameterised
+		// even though the WHERE clause itself is interpolated into the format
+		// string. Table name uses the %i identifier placeholder.
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 
-		$sql_args = array_merge( $args, [ $per_page, $offset ] );
-
 		if ( empty( $args ) ) {
-			$total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table} WHERE {$where_sql}" );
-		} else {
 			$total = (int) $wpdb->get_var(
-				$wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE {$where_sql}", $args )
+				$wpdb->prepare( "SELECT COUNT(*) FROM %i WHERE {$where_sql}", $table )
+			);
+		} else {
+			$count_args = array_merge( [ $table ], $args );
+			$total      = (int) $wpdb->get_var(
+				$wpdb->prepare( "SELECT COUNT(*) FROM %i WHERE {$where_sql}", $count_args )
 			);
 		}
 
-		$rows = $wpdb->get_results(
-			$wpdb->prepare( "SELECT * FROM {$table} WHERE {$where_sql} ORDER BY id DESC LIMIT %d OFFSET %d", $sql_args )
+		$sql_args = array_merge( [ $table ], $args, [ $per_page, $offset ] );
+		$rows     = $wpdb->get_results(
+			$wpdb->prepare( "SELECT * FROM %i WHERE {$where_sql} ORDER BY id DESC LIMIT %d OFFSET %d", $sql_args )
 		);
 
 		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
@@ -206,11 +208,11 @@ class Email_Log_Repository {
 		global $wpdb;
 		$table = $this->table_name();
 
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$count = $wpdb->query(
-			$wpdb->prepare( "DELETE FROM {$table} WHERE created_at < DATE_SUB(NOW(), INTERVAL %d DAY)", $days )
+			$wpdb->prepare( 'DELETE FROM %i WHERE created_at < DATE_SUB(NOW(), INTERVAL %d DAY)', $table, $days )
 		);
-		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
 		return false === $count ? 0 : (int) $count;
 	}
@@ -224,8 +226,8 @@ class Email_Log_Repository {
 		global $wpdb;
 		$table = $this->table_name();
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$wpdb->query( "TRUNCATE TABLE {$table}" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange
+		$wpdb->query( $wpdb->prepare( 'TRUNCATE TABLE %i', $table ) );
 	}
 
 	/**
@@ -237,8 +239,8 @@ class Email_Log_Repository {
 		global $wpdb;
 		$table = $this->table_name();
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$wpdb->query( "DROP TABLE IF EXISTS {$table}" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange
+		$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $table ) );
 		delete_option( self::SCHEMA_OPTION );
 	}
 }

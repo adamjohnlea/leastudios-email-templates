@@ -258,8 +258,8 @@ class Payment_Data_Resolver {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$orders = $wpdb->get_results(
 			$wpdb->prepare(
-				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-				"SELECT line_items_json FROM {$table} WHERE stripe_customer_id = %s AND order_type = 'subscription' ORDER BY id DESC",
+				"SELECT line_items_json FROM %i WHERE stripe_customer_id = %s AND order_type = 'subscription' ORDER BY id DESC",
+				$table,
 				$sub->stripe_customer_id
 			)
 		);

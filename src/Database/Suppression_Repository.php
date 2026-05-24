@@ -96,20 +96,21 @@ class Suppression_Repository {
 		$table = $this->table_name();
 
 		// $wpdb->insert doesn't support ON DUPLICATE KEY, so build the
-		// statement by hand. Table name is constructed from a fixed string +
-		// the wpdb prefix and the placeholders cover every user-supplied value.
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// statement by hand. Table name uses the %i identifier placeholder
+		// and the remaining placeholders cover every user-supplied value.
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$wpdb->query(
 			$wpdb->prepare(
-				"INSERT INTO {$table} (email, suppressed_at, source)
+				'INSERT INTO %i (email, suppressed_at, source)
 				 VALUES (%s, %s, %s)
-				 ON DUPLICATE KEY UPDATE suppressed_at = VALUES(suppressed_at), source = VALUES(source)",
+				 ON DUPLICATE KEY UPDATE suppressed_at = VALUES(suppressed_at), source = VALUES(source)',
+				$table,
 				$email,
 				current_time( 'mysql' ),
 				$source
 			)
 		);
-		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 	}
 
 	/**
@@ -124,8 +125,8 @@ class Suppression_Repository {
 		$email = $this->normalize( $email );
 		$table = $this->table_name();
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$id = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$table} WHERE email = %s LIMIT 1", $email ) );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$id = $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM %i WHERE email = %s LIMIT 1', $table, $email ) );
 
 		return null !== $id;
 	}
@@ -155,8 +156,8 @@ class Suppression_Repository {
 		global $wpdb;
 		$table = $this->table_name();
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id ) );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE id = %d', $table, $id ) );
 
 		return $row instanceof \stdClass ? Suppression_Entry::from_row( $row ) : null;
 	}
@@ -183,17 +184,26 @@ class Suppression_Repository {
 		$where_sql = implode( ' AND ', $where );
 		$offset    = max( 0, ( $page - 1 ) * $per_page );
 
+		// The WHERE clause is built from internal vocabulary (constant filter
+		// keys mapping to '%s' placeholders), so the SQL remains parameterised
+		// even though the WHERE clause itself is interpolated into the format
+		// string. Table name uses the %i identifier placeholder.
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 
 		if ( empty( $args ) ) {
-			$total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table} WHERE {$where_sql}" );
+			$total = (int) $wpdb->get_var(
+				$wpdb->prepare( "SELECT COUNT(*) FROM %i WHERE {$where_sql}", $table )
+			);
 		} else {
-			$total = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE {$where_sql}", $args ) );
+			$count_args = array_merge( [ $table ], $args );
+			$total      = (int) $wpdb->get_var(
+				$wpdb->prepare( "SELECT COUNT(*) FROM %i WHERE {$where_sql}", $count_args )
+			);
 		}
 
-		$sql_args = array_merge( $args, [ $per_page, $offset ] );
+		$sql_args = array_merge( [ $table ], $args, [ $per_page, $offset ] );
 		$rows     = $wpdb->get_results(
-			$wpdb->prepare( "SELECT * FROM {$table} WHERE {$where_sql} ORDER BY suppressed_at DESC, id DESC LIMIT %d OFFSET %d", $sql_args )
+			$wpdb->prepare( "SELECT * FROM %i WHERE {$where_sql} ORDER BY suppressed_at DESC, id DESC LIMIT %d OFFSET %d", $sql_args )
 		);
 
 		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
@@ -222,8 +232,8 @@ class Suppression_Repository {
 		global $wpdb;
 		$table = $this->table_name();
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$wpdb->query( "TRUNCATE TABLE {$table}" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange
+		$wpdb->query( $wpdb->prepare( 'TRUNCATE TABLE %i', $table ) );
 	}
 
 	/**
@@ -235,8 +245,8 @@ class Suppression_Repository {
 		global $wpdb;
 		$table = $this->table_name();
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$wpdb->query( "DROP TABLE IF EXISTS {$table}" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange
+		$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $table ) );
 		delete_option( self::SCHEMA_OPTION );
 	}
 }
