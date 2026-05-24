@@ -1,0 +1,10 @@
+# Files exempted from the DB-interpolation tripwire (bin/check-db-interpolation.sh).
+# Each line is a path relative to the plugin root.
+#
+# Every exemption MUST be paired with an inline rationale comment at the call site.
+# See ../leastudios-dev-tools/CLAUDE.md > Database for the underlying rule.
+
+# paginate() builds the WHERE clause from a closed allowlist of filter keys
+# (type, status, since, until). User values still flow through %s/%d.
+src/Database/Email_Log_Repository.php
+src/Database/Suppression_Repository.php
