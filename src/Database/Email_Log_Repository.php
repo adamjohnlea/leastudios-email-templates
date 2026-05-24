@@ -135,53 +135,342 @@ class Email_Log_Repository {
 	 */
 	public function paginate( array $filters, int $per_page, int $page ): array {
 		global $wpdb;
-		$table = $this->table_name();
-		$where = [ '1=1' ];
-		$args  = [];
+		$table  = $this->table_name();
+		$offset = max( 0, ( $page - 1 ) * $per_page );
 
-		if ( ! empty( $filters['type'] ) ) {
-			$where[] = 'type = %s';
-			$args[]  = $filters['type'];
+		$type   = ! empty( $filters['type'] ) ? (string) $filters['type'] : null;
+		$status = ! empty( $filters['status'] ) ? (string) $filters['status'] : null;
+		$since  = ! empty( $filters['since'] ) ? (string) $filters['since'] : null;
+		$until  = ! empty( $filters['until'] ) ? (string) $filters['until'] : null;
+
+		// Each of the 16 filter combinations is enumerated as a fully-static prepare() format string so
+		// no WHERE fragment is ever interpolated, satisfying Plugin Check's stricter DB-interpolation sniff.
+		// The bitmask is composed in fixed order (type, status, since, until) for readability of the cases.
+		$mask = ( null !== $type ? 8 : 0 )
+			| ( null !== $status ? 4 : 0 )
+			| ( null !== $since ? 2 : 0 )
+			| ( null !== $until ? 1 : 0 );
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		switch ( $mask ) {
+			case 0: // no filters.
+				$total = (int) $wpdb->get_var(
+					$wpdb->prepare( 'SELECT COUNT(*) FROM %i', $table )
+				);
+				$rows  = $wpdb->get_results(
+					$wpdb->prepare(
+						'SELECT * FROM %i ORDER BY id DESC LIMIT %d OFFSET %d',
+						$table,
+						$per_page,
+						$offset
+					)
+				);
+				break;
+
+			case 1: // until.
+				$total = (int) $wpdb->get_var(
+					$wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE created_at <= %s', $table, $until )
+				);
+				$rows  = $wpdb->get_results(
+					$wpdb->prepare(
+						'SELECT * FROM %i WHERE created_at <= %s ORDER BY id DESC LIMIT %d OFFSET %d',
+						$table,
+						$until,
+						$per_page,
+						$offset
+					)
+				);
+				break;
+
+			case 2: // since.
+				$total = (int) $wpdb->get_var(
+					$wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE created_at >= %s', $table, $since )
+				);
+				$rows  = $wpdb->get_results(
+					$wpdb->prepare(
+						'SELECT * FROM %i WHERE created_at >= %s ORDER BY id DESC LIMIT %d OFFSET %d',
+						$table,
+						$since,
+						$per_page,
+						$offset
+					)
+				);
+				break;
+
+			case 3: // since + until.
+				$total = (int) $wpdb->get_var(
+					$wpdb->prepare(
+						'SELECT COUNT(*) FROM %i WHERE created_at >= %s AND created_at <= %s',
+						$table,
+						$since,
+						$until
+					)
+				);
+				$rows  = $wpdb->get_results(
+					$wpdb->prepare(
+						'SELECT * FROM %i WHERE created_at >= %s AND created_at <= %s ORDER BY id DESC LIMIT %d OFFSET %d',
+						$table,
+						$since,
+						$until,
+						$per_page,
+						$offset
+					)
+				);
+				break;
+
+			case 4: // status.
+				$total = (int) $wpdb->get_var(
+					$wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE status = %s', $table, $status )
+				);
+				$rows  = $wpdb->get_results(
+					$wpdb->prepare(
+						'SELECT * FROM %i WHERE status = %s ORDER BY id DESC LIMIT %d OFFSET %d',
+						$table,
+						$status,
+						$per_page,
+						$offset
+					)
+				);
+				break;
+
+			case 5: // status + until.
+				$total = (int) $wpdb->get_var(
+					$wpdb->prepare(
+						'SELECT COUNT(*) FROM %i WHERE status = %s AND created_at <= %s',
+						$table,
+						$status,
+						$until
+					)
+				);
+				$rows  = $wpdb->get_results(
+					$wpdb->prepare(
+						'SELECT * FROM %i WHERE status = %s AND created_at <= %s ORDER BY id DESC LIMIT %d OFFSET %d',
+						$table,
+						$status,
+						$until,
+						$per_page,
+						$offset
+					)
+				);
+				break;
+
+			case 6: // status + since.
+				$total = (int) $wpdb->get_var(
+					$wpdb->prepare(
+						'SELECT COUNT(*) FROM %i WHERE status = %s AND created_at >= %s',
+						$table,
+						$status,
+						$since
+					)
+				);
+				$rows  = $wpdb->get_results(
+					$wpdb->prepare(
+						'SELECT * FROM %i WHERE status = %s AND created_at >= %s ORDER BY id DESC LIMIT %d OFFSET %d',
+						$table,
+						$status,
+						$since,
+						$per_page,
+						$offset
+					)
+				);
+				break;
+
+			case 7: // status + since + until.
+				$total = (int) $wpdb->get_var(
+					$wpdb->prepare(
+						'SELECT COUNT(*) FROM %i WHERE status = %s AND created_at >= %s AND created_at <= %s',
+						$table,
+						$status,
+						$since,
+						$until
+					)
+				);
+				$rows  = $wpdb->get_results(
+					$wpdb->prepare(
+						'SELECT * FROM %i WHERE status = %s AND created_at >= %s AND created_at <= %s ORDER BY id DESC LIMIT %d OFFSET %d',
+						$table,
+						$status,
+						$since,
+						$until,
+						$per_page,
+						$offset
+					)
+				);
+				break;
+
+			case 8: // type.
+				$total = (int) $wpdb->get_var(
+					$wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE type = %s', $table, $type )
+				);
+				$rows  = $wpdb->get_results(
+					$wpdb->prepare(
+						'SELECT * FROM %i WHERE type = %s ORDER BY id DESC LIMIT %d OFFSET %d',
+						$table,
+						$type,
+						$per_page,
+						$offset
+					)
+				);
+				break;
+
+			case 9: // type + until.
+				$total = (int) $wpdb->get_var(
+					$wpdb->prepare(
+						'SELECT COUNT(*) FROM %i WHERE type = %s AND created_at <= %s',
+						$table,
+						$type,
+						$until
+					)
+				);
+				$rows  = $wpdb->get_results(
+					$wpdb->prepare(
+						'SELECT * FROM %i WHERE type = %s AND created_at <= %s ORDER BY id DESC LIMIT %d OFFSET %d',
+						$table,
+						$type,
+						$until,
+						$per_page,
+						$offset
+					)
+				);
+				break;
+
+			case 10: // type + since.
+				$total = (int) $wpdb->get_var(
+					$wpdb->prepare(
+						'SELECT COUNT(*) FROM %i WHERE type = %s AND created_at >= %s',
+						$table,
+						$type,
+						$since
+					)
+				);
+				$rows  = $wpdb->get_results(
+					$wpdb->prepare(
+						'SELECT * FROM %i WHERE type = %s AND created_at >= %s ORDER BY id DESC LIMIT %d OFFSET %d',
+						$table,
+						$type,
+						$since,
+						$per_page,
+						$offset
+					)
+				);
+				break;
+
+			case 11: // type + since + until.
+				$total = (int) $wpdb->get_var(
+					$wpdb->prepare(
+						'SELECT COUNT(*) FROM %i WHERE type = %s AND created_at >= %s AND created_at <= %s',
+						$table,
+						$type,
+						$since,
+						$until
+					)
+				);
+				$rows  = $wpdb->get_results(
+					$wpdb->prepare(
+						'SELECT * FROM %i WHERE type = %s AND created_at >= %s AND created_at <= %s ORDER BY id DESC LIMIT %d OFFSET %d',
+						$table,
+						$type,
+						$since,
+						$until,
+						$per_page,
+						$offset
+					)
+				);
+				break;
+
+			case 12: // type + status.
+				$total = (int) $wpdb->get_var(
+					$wpdb->prepare(
+						'SELECT COUNT(*) FROM %i WHERE type = %s AND status = %s',
+						$table,
+						$type,
+						$status
+					)
+				);
+				$rows  = $wpdb->get_results(
+					$wpdb->prepare(
+						'SELECT * FROM %i WHERE type = %s AND status = %s ORDER BY id DESC LIMIT %d OFFSET %d',
+						$table,
+						$type,
+						$status,
+						$per_page,
+						$offset
+					)
+				);
+				break;
+
+			case 13: // type + status + until.
+				$total = (int) $wpdb->get_var(
+					$wpdb->prepare(
+						'SELECT COUNT(*) FROM %i WHERE type = %s AND status = %s AND created_at <= %s',
+						$table,
+						$type,
+						$status,
+						$until
+					)
+				);
+				$rows  = $wpdb->get_results(
+					$wpdb->prepare(
+						'SELECT * FROM %i WHERE type = %s AND status = %s AND created_at <= %s ORDER BY id DESC LIMIT %d OFFSET %d',
+						$table,
+						$type,
+						$status,
+						$until,
+						$per_page,
+						$offset
+					)
+				);
+				break;
+
+			case 14: // type + status + since.
+				$total = (int) $wpdb->get_var(
+					$wpdb->prepare(
+						'SELECT COUNT(*) FROM %i WHERE type = %s AND status = %s AND created_at >= %s',
+						$table,
+						$type,
+						$status,
+						$since
+					)
+				);
+				$rows  = $wpdb->get_results(
+					$wpdb->prepare(
+						'SELECT * FROM %i WHERE type = %s AND status = %s AND created_at >= %s ORDER BY id DESC LIMIT %d OFFSET %d',
+						$table,
+						$type,
+						$status,
+						$since,
+						$per_page,
+						$offset
+					)
+				);
+				break;
+
+			default: // 15: type + status + since + until.
+				$total = (int) $wpdb->get_var(
+					$wpdb->prepare(
+						'SELECT COUNT(*) FROM %i WHERE type = %s AND status = %s AND created_at >= %s AND created_at <= %s',
+						$table,
+						$type,
+						$status,
+						$since,
+						$until
+					)
+				);
+				$rows  = $wpdb->get_results(
+					$wpdb->prepare(
+						'SELECT * FROM %i WHERE type = %s AND status = %s AND created_at >= %s AND created_at <= %s ORDER BY id DESC LIMIT %d OFFSET %d',
+						$table,
+						$type,
+						$status,
+						$since,
+						$until,
+						$per_page,
+						$offset
+					)
+				);
+				break;
 		}
-		if ( ! empty( $filters['status'] ) ) {
-			$where[] = 'status = %s';
-			$args[]  = $filters['status'];
-		}
-		if ( ! empty( $filters['since'] ) ) {
-			$where[] = 'created_at >= %s';
-			$args[]  = $filters['since'];
-		}
-		if ( ! empty( $filters['until'] ) ) {
-			$where[] = 'created_at <= %s';
-			$args[]  = $filters['until'];
-		}
-
-		$where_sql = implode( ' AND ', $where );
-		$offset    = max( 0, ( $page - 1 ) * $per_page );
-
-		// The WHERE clause is built from internal vocabulary (constant filter
-		// keys mapping to '%s' placeholders), so the SQL remains parameterised
-		// even though the WHERE clause itself is interpolated into the format
-		// string. Table name uses the %i identifier placeholder.
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-
-		if ( empty( $args ) ) {
-			$total = (int) $wpdb->get_var(
-				$wpdb->prepare( "SELECT COUNT(*) FROM %i WHERE {$where_sql}", $table )
-			);
-		} else {
-			$count_args = array_merge( [ $table ], $args );
-			$total      = (int) $wpdb->get_var(
-				$wpdb->prepare( "SELECT COUNT(*) FROM %i WHERE {$where_sql}", $count_args )
-			);
-		}
-
-		$sql_args = array_merge( [ $table ], $args, [ $per_page, $offset ] );
-		$rows     = $wpdb->get_results(
-			$wpdb->prepare( "SELECT * FROM %i WHERE {$where_sql} ORDER BY id DESC LIMIT %d OFFSET %d", $sql_args )
-		);
-
-		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
 		$entries = [];
 		if ( is_array( $rows ) ) {
