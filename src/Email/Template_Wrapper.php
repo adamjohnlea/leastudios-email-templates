@@ -162,14 +162,14 @@ class Template_Wrapper {
 		// phpcs:ignore WordPress.PHP.DontExtract.extract_extract -- Template variables are controlled internally.
 		extract(
 			[
-				'body_html'     => $body_html,
-				'logo_url'      => $logo_url,
-				'primary_color' => $primary_color,
-				'footer_text'   => $footer_text,
-				'social_links'  => $social_links,
-				'site_name'     => $site_name,
-				'colors'        => $theme->colors,
-				'prefers_dark'  => $theme->supports_prefers_dark_override,
+				'leastudios_email_templates_body_html'     => $body_html,
+				'leastudios_email_templates_logo_url'      => $logo_url,
+				'leastudios_email_templates_primary_color' => $primary_color,
+				'leastudios_email_templates_footer_text'   => $footer_text,
+				'leastudios_email_templates_social_links'  => $social_links,
+				'leastudios_email_templates_site_name'     => $site_name,
+				'leastudios_email_templates_colors'        => $theme->colors,
+				'leastudios_email_templates_prefers_dark'  => $theme->supports_prefers_dark_override,
 			]
 		);
 		include $template_path;

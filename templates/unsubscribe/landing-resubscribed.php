@@ -3,7 +3,7 @@
  * Landing page shown after re-subscribe.
  *
  * Variables in scope:
- *   string $email Re-subscribed email (normalized).
+ *   string $leastudios_email_templates_email Re-subscribed email (normalized).
  *
  * @package LEAStudios\EmailTemplates
  */
@@ -34,7 +34,7 @@ defined( 'ABSPATH' ) || exit;
 			printf(
 				// translators: %s is the recipient email address.
 				esc_html__( 'We\'ll resume sending emails to %s.', 'leastudios-email-templates' ),
-				'<span class="email">' . esc_html( $email ) . '</span>'
+				'<span class="email">' . esc_html( $leastudios_email_templates_email ) . '</span>'
 			);
 			?>
 		</p>

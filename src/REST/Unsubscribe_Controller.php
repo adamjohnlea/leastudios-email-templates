@@ -121,10 +121,10 @@ final class Unsubscribe_Controller extends WP_REST_Controller {
 			$this->render_template(
 				'landing-unsubscribed.php',
 				[
-					'email'       => $email,
-					'token'       => $token,
-					'button_bg'   => $button_bg,
-					'button_text' => self::pick_button_text_color( $button_bg ),
+					'leastudios_email_templates_email'     => $email,
+					'leastudios_email_templates_token'     => $token,
+					'leastudios_email_templates_button_bg' => $button_bg,
+					'leastudios_email_templates_button_text' => self::pick_button_text_color( $button_bg ),
 				]
 			)
 		);
@@ -149,7 +149,7 @@ final class Unsubscribe_Controller extends WP_REST_Controller {
 
 		return $this->html_response(
 			200,
-			$this->render_template( 'landing-resubscribed.php', [ 'email' => $email ] )
+			$this->render_template( 'landing-resubscribed.php', [ 'leastudios_email_templates_email' => $email ] )
 		);
 	}
 
