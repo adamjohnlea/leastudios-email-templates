@@ -8,7 +8,7 @@ Stable tag: 1.1.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Branded HTML wrapper for every outgoing WordPress email, plus a transactional pipeline for leaStudios Payments with full unsubscribe / suppression support.
+Branded HTML wrapper for every outgoing WordPress email, plus transactional pipeline for leaStudios Payments with unsubscribe support.
 
 == Description ==
 
@@ -89,4 +89,4 @@ Hook `leastudios_email_templates_register_types` at file scope (before `plugins_
 Fixes a fatal error on the Email Templates → Suppressions admin page introduced in 1.1.0. Recommended upgrade for anyone running 1.1.0.
 
 = 1.1.0 =
-Adds a suppression / unsubscribe gate: non-required transactional types (e.g., subscription_created) now skip recipients who have opted out via the auto-appended footer link. Required types (receipts, refunds, payment-failure, renewal receipts) bypass the gate. Review the new Email Templates → Suppressions admin page after upgrade.
+Adds an unsubscribe / suppression gate: non-required transactional types now skip opted-out recipients via an auto-appended footer link. Required types (receipts, refunds, payment-failure, renewal receipts) bypass the gate. Review the new Email Templates → Suppressions admin page after upgrade.
