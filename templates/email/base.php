@@ -90,9 +90,9 @@ defined( 'ABSPATH' ) || exit;
 							<?php endif; ?>
 
 							<?php
-							$active_socials = array_filter( $social_links ?? [] );
-							if ( ! empty( $active_socials ) ) :
-								$social_labels = [
+							$let_active_socials = array_filter( $social_links ?? [] );
+							if ( ! empty( $let_active_socials ) ) :
+								$let_social_labels = [
 									'twitter'   => 'Twitter',
 									'facebook'  => 'Facebook',
 									'linkedin'  => 'LinkedIn',
@@ -101,13 +101,13 @@ defined( 'ABSPATH' ) || exit;
 								?>
 								<p class="leastudios-muted" style="margin:0 0 15px;font-size:13px;color:<?php echo esc_attr( $colors['muted'] ); ?>;">
 									<?php
-									$links = [];
-									foreach ( $active_socials as $platform => $url ) {
-										$label   = $social_labels[ $platform ] ?? ucfirst( $platform );
-										$links[] = '<a href="' . esc_url( $url ) . '" style="color:' . esc_attr( $primary_color ) . ';text-decoration:none;">' . esc_html( $label ) . '</a>';
+									$let_links = [];
+									foreach ( $let_active_socials as $let_platform => $let_url ) {
+										$let_label   = $let_social_labels[ $let_platform ] ?? ucfirst( $let_platform );
+										$let_links[] = '<a href="' . esc_url( $let_url ) . '" style="color:' . esc_attr( $primary_color ) . ';text-decoration:none;">' . esc_html( $let_label ) . '</a>';
 									}
 									// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Each link is escaped individually above.
-									echo implode( ' &middot; ', $links );
+									echo implode( ' &middot; ', $let_links );
 									?>
 								</p>
 							<?php endif; ?>
