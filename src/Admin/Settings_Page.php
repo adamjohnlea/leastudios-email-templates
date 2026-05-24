@@ -70,6 +70,7 @@ class Settings_Page {
 		add_action( 'wp_ajax_leastudios_email_templates_preview', [ $this, 'handle_preview' ] );
 		add_action( 'wp_ajax_leastudios_email_templates_preview_type', [ $this, 'handle_preview_type' ] );
 		add_action( 'wp_ajax_leastudios_email_templates_send_test', [ $this, 'handle_send_test' ] );
+		add_action( 'wp_ajax_leastudios_email_templates_send_branded_sample', [ $this, 'handle_send_branded_sample' ] );
 	}
 
 	/**
@@ -360,6 +361,23 @@ class Settings_Page {
 		<div id="leastudios-preview-frame" style="margin-top:15px;border:1px solid #ccd0d4;background:#fff;display:none;">
 			<iframe id="leastudios-preview-iframe" style="width:100%;height:600px;border:0;"></iframe>
 		</div>
+
+		<h3><?php esc_html_e( 'Send Branded Sample', 'leastudios-email-templates' ); ?></h3>
+		<p class="description">
+			<?php esc_html_e( 'Send a sample email through the full delivery pipeline (wp_mail + mailer + wrapper) to verify your branding renders correctly in a real inbox.', 'leastudios-email-templates' ); ?>
+		</p>
+		<p>
+			<input
+				type="email"
+				id="leastudios-branded-sample-to"
+				class="regular-text"
+				placeholder="<?php echo esc_attr( wp_get_current_user()->user_email ); ?>"
+			/>
+			<button type="button" id="leastudios-send-branded-sample" class="button">
+				<?php esc_html_e( 'Send Branded Sample', 'leastudios-email-templates' ); ?>
+			</button>
+		</p>
+		<p class="description" id="leastudios-branded-sample-result"></p>
 		<?php
 	}
 
@@ -604,6 +622,55 @@ class Settings_Page {
 				'message' => sprintf(
 					/* translators: %s is the recipient email address. */
 					__( 'Test email sent to %s.', 'leastudios-email-templates' ),
+					$to
+				),
+			]
+		);
+	}
+
+	/**
+	 * AJAX handler: send a generic branded sample email through wp_mail().
+	 *
+	 * Exercises the full delivery pipeline — wp_mail() → mailer interception
+	 * (if active) → wrapper → SES/PHPMailer — so admins can verify branding
+	 * renders correctly in a real inbox without having to craft a wp_mail
+	 * call manually or send a type-specific transactional sample.
+	 *
+	 * @return void
+	 */
+	public function handle_send_branded_sample(): void {
+		Nonce::check_ajax( 'preview' );
+
+		if ( ! current_user_can( self::CAPABILITY ) ) {
+			wp_send_json_error( __( 'Permission denied.', 'leastudios-email-templates' ) );
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce is checked above via Nonce::check_ajax.
+		$to = isset( $_POST['to'] ) ? sanitize_email( wp_unslash( (string) $_POST['to'] ) ) : '';
+
+		if ( '' === $to || ! is_email( $to ) ) {
+			wp_send_json_error( __( 'A valid email address is required.', 'leastudios-email-templates' ) );
+		}
+
+		$subject = __( 'Branded sample — leaStudios Email Templates', 'leastudios-email-templates' );
+		$body    = '<h2 style="margin:0 0 16px;">' . esc_html__( 'This is a branded sample email.', 'leastudios-email-templates' ) . '</h2>'
+			. '<p>' . esc_html__( 'If your branding is configured correctly, this email should display with your logo (or site name), primary color accents, footer text, and any configured social links.', 'leastudios-email-templates' ) . '</p>'
+			. '<p>' . esc_html__( 'This email was sent through wp_mail() and routed through your active mailer plugin (if configured), exercising the full delivery pipeline.', 'leastudios-email-templates' ) . '</p>';
+
+		$headers = [ 'Content-Type: text/html; charset=UTF-8' ];
+		$result  = wp_mail( $to, $subject, $body, $headers );
+
+		if ( ! $result ) {
+			wp_send_json_error(
+				__( 'Sample could not be sent. Check that wp_mail is configured (or your active mailer plugin if applicable).', 'leastudios-email-templates' )
+			);
+		}
+
+		wp_send_json_success(
+			[
+				'message' => sprintf(
+					/* translators: %s is the recipient email address. */
+					__( 'Branded sample sent to %s.', 'leastudios-email-templates' ),
 					$to
 				),
 			]

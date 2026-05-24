@@ -156,5 +156,36 @@
 				$result.text('Network error.').css('color', '#b32d2e');
 			});
 		});
+
+		// Send branded sample (Branding tab).
+		$(document).on('click', '#leastudios-send-branded-sample', function () {
+			var $btn = $(this);
+			var $input = $('#leastudios-branded-sample-to');
+			var to = ($input.val() || $input.attr('placeholder') || '').trim();
+			var $result = $('#leastudios-branded-sample-result').text('').css('color', '');
+
+			if (!to) {
+				$result.text('Enter an email address first.').css('color', '#b32d2e');
+				return;
+			}
+
+			$btn.prop('disabled', true);
+
+			$.post(leastudiosEmailTemplates.ajaxUrl, {
+				action: 'leastudios_email_templates_send_branded_sample',
+				_wpnonce: leastudiosEmailTemplates.previewNonce,
+				to: to
+			}, function (response) {
+				$btn.prop('disabled', false);
+				if (response.success) {
+					$result.text(response.data.message).css('color', '#1d8a1d');
+				} else {
+					$result.text(response.data || 'Send failed.').css('color', '#b32d2e');
+				}
+			}).fail(function () {
+				$btn.prop('disabled', false);
+				$result.text('Network error.').css('color', '#b32d2e');
+			});
+		});
 	});
 })(jQuery);
