@@ -598,17 +598,13 @@ add_action(
 add_filter(
     'leastudios_email_templates_unsubscribe_footer_html',
     function ( string $default_html, string $to, string $type_id ): string {
-        // Use a custom branded footer with a different message.
-        $url = esc_url( rest_url( 'leastudios-email-templates/v1/unsubscribe' ) );
-
-        return '<div style="text-align:center;padding:16px;font-size:11px;color:#9ca3af;">'
-            . sprintf(
-                /* translators: 1: opening anchor tag, 2: closing anchor tag */
-                esc_html__( 'To stop receiving emails like this, %1$sunsubscribe here%2$s.', 'my-plugin' ),
-                '<a href="' . esc_url( rest_url( 'leastudios-email-templates/v1/unsubscribe?token=' . rawurlencode( '' ) ) ) . '" style="color:#6b7280;">',
-                '</a>'
-            )
-            . '</div>';
+        // Append a custom branded note after the default unsubscribe footer.
+        // $default_html already contains a working unsubscribe link signed for $to,
+        // so build on top of it rather than replacing the link entirely.
+        return $default_html
+            . '<p style="text-align:center;font-size:11px;color:#9ca3af;margin:4px 0 0;">'
+            . esc_html__( 'Questions? Reply to this email and we\'ll be happy to help.', 'my-plugin' )
+            . '</p>';
     },
     10,
     3
@@ -740,7 +736,7 @@ in this order:
 | 3 | `leastudios_email_templates_unsubscribe_url` | Filter | Per-compose, after context is built |
 | 4 | `leastudios_email_templates_send_args` | Filter | After `compose()`, before footer append |
 | 5 | `leastudios_email_templates_unsubscribe_footer_html` | Filter | Before footer is concatenated to body |
-| 6 | `leastudios_email_templates_template_path` | Filter | Inside `wp_mail()` → `Template_Wrapper::wrap()` |
+| 6 | `leastudios_email_templates_template_path` | Filter | Inside `Template_Wrapper::wrap()` — fired from `leastudios_mailer_pre_send:20` when mailer is active, or from the `wp_mail` filter path otherwise |
 | 7 | `leastudios_email_templates_email_sent` | Action | Immediately after `wp_mail()` returns |
 
 ### Suppressed send path
@@ -1001,9 +997,10 @@ and are available whenever `WP_CLI` is defined.
 
 - **Description:** Deletes the suppression row for the given address, allowing
   future non-required-type sends to proceed. If the address is not currently
-  suppressed, the command exits with a warning (non-zero exit). This is the
-  CLI equivalent of clicking "Remove" in the admin Suppressions page and is also
-  called by the REST `POST /resubscribe` endpoint (via `Unsubscribe_Manager`).
+  suppressed, the command prints a warning to stderr and exits 0 (the operation
+  is treated as idempotent). This is the CLI equivalent of clicking "Remove" in
+  the admin Suppressions page and is also called by the REST `POST /resubscribe`
+  endpoint (via `Unsubscribe_Manager`).
 
 - **Example:**
 
@@ -1245,12 +1242,9 @@ class Welcome_Email_Listener {
     }
 }
 
-// In my-plugin/my-plugin.php — hook before plugins_loaded:10 resolves:
-add_action( 'leastudios_email_templates_register_types', function ( $registry ) use ( &$sender_ref ) {
-    // Capture the sender instance once it is available (it is constructed
-    // inside Plugin::init() on the same plugins_loaded:10 call, so we must
-    // store our listener initialization until after Plugin::init() completes).
-} );
+// `Email_Sender` is constructed during `Plugin::init()` on `plugins_loaded:10`,
+// so wait until `plugins_loaded:20` to access it through `Plugin::instance()`
+// (or your equivalent).
 
 // Hook at priority 20 (after Plugin::init at 10):
 add_action( 'plugins_loaded', function (): void {
