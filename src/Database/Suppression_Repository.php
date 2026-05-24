@@ -172,41 +172,49 @@ class Suppression_Repository {
 	 */
 	public function paginate( array $filters, int $per_page, int $page ): array {
 		global $wpdb;
-		$table = $this->table_name();
-		$where = [ '1=1' ];
-		$args  = [];
+		$table  = $this->table_name();
+		$offset = max( 0, ( $page - 1 ) * $per_page );
 
-		if ( ! empty( $filters['email'] ) ) {
-			$where[] = 'email LIKE %s';
-			$args[]  = '%' . $wpdb->esc_like( $this->normalize( $filters['email'] ) ) . '%';
-		}
+		$email_filter = ! empty( $filters['email'] )
+			? '%' . $wpdb->esc_like( $this->normalize( $filters['email'] ) ) . '%'
+			: null;
 
-		$where_sql = implode( ' AND ', $where );
-		$offset    = max( 0, ( $page - 1 ) * $per_page );
-
-		// The WHERE clause is built from internal vocabulary (constant filter
-		// keys mapping to '%s' placeholders), so the SQL remains parameterised
-		// even though the WHERE clause itself is interpolated into the format
-		// string. Table name uses the %i identifier placeholder.
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-
-		if ( empty( $args ) ) {
+		// Each filter combination is enumerated as a fully-static prepare() format string so the
+		// WHERE fragment is never interpolated, satisfying Plugin Check's stricter DB-interpolation sniff.
+		if ( null !== $email_filter ) {
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$total = (int) $wpdb->get_var(
-				$wpdb->prepare( "SELECT COUNT(*) FROM %i WHERE {$where_sql}", $table )
+				$wpdb->prepare(
+					'SELECT COUNT(*) FROM %i WHERE email LIKE %s',
+					$table,
+					$email_filter
+				)
 			);
+			$rows  = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT * FROM %i WHERE email LIKE %s ORDER BY suppressed_at DESC, id DESC LIMIT %d OFFSET %d',
+					$table,
+					$email_filter,
+					$per_page,
+					$offset
+				)
+			);
+			// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		} else {
-			$count_args = array_merge( [ $table ], $args );
-			$total      = (int) $wpdb->get_var(
-				$wpdb->prepare( "SELECT COUNT(*) FROM %i WHERE {$where_sql}", $count_args )
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$total = (int) $wpdb->get_var(
+				$wpdb->prepare( 'SELECT COUNT(*) FROM %i', $table )
 			);
+			$rows  = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT * FROM %i ORDER BY suppressed_at DESC, id DESC LIMIT %d OFFSET %d',
+					$table,
+					$per_page,
+					$offset
+				)
+			);
+			// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		}
-
-		$sql_args = array_merge( [ $table ], $args, [ $per_page, $offset ] );
-		$rows     = $wpdb->get_results(
-			$wpdb->prepare( "SELECT * FROM %i WHERE {$where_sql} ORDER BY suppressed_at DESC, id DESC LIMIT %d OFFSET %d", $sql_args )
-		);
-
-		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 
 		$entries = [];
 		if ( is_array( $rows ) ) {

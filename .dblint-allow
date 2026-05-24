@@ -7,4 +7,3 @@
 # paginate() builds the WHERE clause from a closed allowlist of filter keys
 # (type, status, since, until). User values still flow through %s/%d.
 src/Database/Email_Log_Repository.php
-src/Database/Suppression_Repository.php
