@@ -267,38 +267,6 @@ One row per opted-out email address. `UNIQUE` on `email`. Dropped on uninstall.
 
 ### Registration & Rendering Hooks
 
-#### `leastudios_email_templates_register_types`
-
-- **Type:** Action
-- **Location:** `src/Plugin.php`
-- **Since:** 1.1.0
-- **Description:** Fires once during `Plugin::init()`, immediately after the five
-  built-in email types are registered. Third-party plugins hook this action to
-  register their own `Email_Type_Definition` implementations. The `$registry`
-  instance is passed as the sole argument — call `$registry->register()` with
-  your definition. Because `Plugin::init()` runs on `plugins_loaded` at priority
-  10, your callback must be registered at file scope (before `plugins_loaded:10`
-  fires) to be queued in time.
-
-**Parameters:**
-
-| Parameter | Type | Description |
-|---|---|---|
-| `$registry` | `Email_Type_Registry` | The registry to mutate. Call `$registry->register()`. |
-
-**Example:**
-
-```php
-add_action(
-    'leastudios_email_templates_register_types',
-    function ( \LEAStudios\EmailTemplates\Email\Email_Type_Registry $registry ): void {
-        $registry->register( new My_Plugin\Email\Welcome_Email() );
-    }
-);
-```
-
----
-
 #### `leastudios_email_templates_merge_tags`
 
 - **Type:** Filter
@@ -374,6 +342,38 @@ add_filter(
 
 ---
 
+#### `leastudios_email_templates_register_types`
+
+- **Type:** Action
+- **Location:** `src/Plugin.php`
+- **Since:** 1.1.0
+- **Description:** Fires once during `Plugin::init()`, immediately after the five
+  built-in email types are registered. Third-party plugins hook this action to
+  register their own `Email_Type_Definition` implementations. The `$registry`
+  instance is passed as the sole argument — call `$registry->register()` with
+  your definition. Because `Plugin::init()` runs on `plugins_loaded` at priority
+  10, your callback must be registered at file scope (before `plugins_loaded:10`
+  fires) to be queued in time.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `$registry` | `Email_Type_Registry` | The registry to mutate. Call `$registry->register()`. |
+
+**Example:**
+
+```php
+add_action(
+    'leastudios_email_templates_register_types',
+    function ( \LEAStudios\EmailTemplates\Email\Email_Type_Registry $registry ): void {
+        $registry->register( new My_Plugin\Email\Welcome_Email() );
+    }
+);
+```
+
+---
+
 ### Send Pipeline & Log Hooks
 
 #### `leastudios_email_templates_send_args`
@@ -418,6 +418,39 @@ add_filter(
     },
     10,
     3
+);
+```
+
+---
+
+#### `leastudios_email_templates_log_retention_days`
+
+- **Type:** Filter
+- **Location:** `src/Plugin.php`
+- **Since:** 1.1.0
+- **Description:** Filters the number of days the email send log retains rows
+  before the daily prune cron (`leastudios_email_templates_log_prune`) deletes
+  them. The default is 30 days. The cron fires once per day via
+  `wp_schedule_event()`; the filter is applied on each prune run. Values less
+  than 1 are clamped to 1 to prevent accidentally truncating the entire log.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `$days` | `int` | Retention window in days. Default `30`. |
+
+**Returns:** `int` — The number of days to retain rows.
+
+**Example:**
+
+```php
+add_filter(
+    'leastudios_email_templates_log_retention_days',
+    function ( int $days ): int {
+        // Keep log rows for 90 days for GDPR audit purposes.
+        return 90;
+    }
 );
 ```
 
@@ -665,39 +698,6 @@ add_filter(
     },
     10,
     3
-);
-```
-
----
-
-#### `leastudios_email_templates_log_retention_days`
-
-- **Type:** Filter
-- **Location:** `src/Plugin.php`
-- **Since:** 1.1.0
-- **Description:** Filters the number of days the email send log retains rows
-  before the daily prune cron (`leastudios_email_templates_log_prune`) deletes
-  them. The default is 30 days. The cron fires once per day via
-  `wp_schedule_event()`; the filter is applied on each prune run. Values less
-  than 1 are clamped to 1 to prevent accidentally truncating the entire log.
-
-**Parameters:**
-
-| Parameter | Type | Description |
-|---|---|---|
-| `$days` | `int` | Retention window in days. Default `30`. |
-
-**Returns:** `int` — The number of days to retain rows.
-
-**Example:**
-
-```php
-add_filter(
-    'leastudios_email_templates_log_retention_days',
-    function ( int $days ): int {
-        // Keep log rows for 90 days for GDPR audit purposes.
-        return 90;
-    }
 );
 ```
 
