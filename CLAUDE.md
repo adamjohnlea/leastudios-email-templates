@@ -123,3 +123,26 @@ For a third-party plugin adding its own type:
 3. Dispatch via `do_action` or by calling `Email_Sender::send( 'my_welcome_email', $to, $context )` from your own code.
 
 A third-party type registered via `leastudios_email_templates_register_types` works with the CLI for free: `wp ... list-types` will list it (tagged `third-party`), and `preview`/`send-test` accept its id like any other.
+
+## Releases
+
+This plugin uses a tag-triggered release workflow (`.github/workflows/release.yml`) that auto-generates release notes from the commit log between the previous and current tag.
+
+**To cut a release:** bump the `Version:` header in the main plugin file, commit, then:
+
+```bash
+git tag vX.Y.Z && git push origin vX.Y.Z
+```
+
+The workflow verifies the tag matches the header, builds the zip with `composer install --no-dev`, and publishes the release.
+
+**Commit-prefix → release-notes section:**
+
+- `feat:` → `## Added`
+- `fix:` → `## Fixed`
+- `refactor:` → `## Changed`
+- `perf:` → `## Performance`
+
+**Hidden from release notes** (use these prefixes for changes you don't want surfaced): `ci:`, `chore:`, `docs:`, `test:`, `style:`, `build:`, `release:`.
+
+The subject text after the prefix becomes the bullet verbatim, with the first letter capitalized. To override auto-notes for a specific release, edit the body in the GitHub UI after publish.
