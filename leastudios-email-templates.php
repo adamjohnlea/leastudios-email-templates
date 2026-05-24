@@ -3,7 +3,7 @@
  * Plugin Name:       leaStudios Email Templates
  * Plugin URI:        https://leastudios.com/plugins/email-templates
  * Description:       Branded email templates for all WordPress emails plus payment transactional emails.
- * Version:           1.1.2
+ * Version:           1.1.3
  * Requires at least: 6.4
  * Requires PHP:      8.2
  * Author:            leaStudios
@@ -22,7 +22,12 @@ declare(strict_types=1);
 defined( 'ABSPATH' ) || exit;
 
 // Plugin constants.
-define( 'LEASTUDIOS_EMAIL_TEMPLATES_VERSION', '1.1.1' );
+// Derive the version from the plugin header so the runtime constant can
+// never drift from the version shipped in the release zip.
+define(
+	'LEASTUDIOS_EMAIL_TEMPLATES_VERSION',
+	get_file_data( __FILE__, [ 'Version' => 'Version' ] )['Version']
+);
 define( 'LEASTUDIOS_EMAIL_TEMPLATES_FILE', __FILE__ );
 define( 'LEASTUDIOS_EMAIL_TEMPLATES_DIR', plugin_dir_path( __FILE__ ) );
 define( 'LEASTUDIOS_EMAIL_TEMPLATES_URL', plugin_dir_url( __FILE__ ) );
