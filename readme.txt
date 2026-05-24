@@ -4,7 +4,7 @@ Tags: email templates, branded emails, payment emails, transactional emails, uns
 Requires at least: 6.4
 Tested up to: 7.0
 Requires PHP: 8.2
-Stable tag: 1.1.3
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,14 @@ Hook `leastudios_email_templates_register_types` at file scope (before `plugins_
 
 == Changelog ==
 
+= 1.2.0 — 2026-05-24 =
+
+* Added: "Send Branded Sample" button on the Branding tab — sends a generic sample email through the full `wp_mail()` pipeline so you can verify wrapper + transport + inbox rendering end-to-end without needing a real payment event.
+* Changed: hardened SQL construction across the plugin for Plugin Check compliance — `Suppression_Repository::paginate` and `Email_Log_Repository::paginate` now enumerate filter branches as static `$wpdb->prepare()` strings rather than concatenating interpolated `$where_sql` fragments. Table-name interpolations across the plugin converted to the `%i` placeholder (WordPress 6.2+).
+* Changed: every template-scope variable in `templates/email/` and `templates/unsubscribe/` is now fully prefixed (`$leastudios_email_templates_*`) to satisfy Plugin Check's prefix rule.
+* Changed: developer handbook added under `docs/developer-handbook.md`, with reorganized hook groups.
+* Internal: new `composer lint:db` tripwire (shared across the suite) blocks variable interpolation in `$wpdb` query construction; Plugin Check is now run against the release zip in CI to catch regressions before tag.
+
 = 1.1.1 — 2026-05-23 =
 
 * Fixed: fatal error on the Email Templates → Suppressions admin page (`Call to undefined function convert_to_screen()`). The list table is now built lazily inside the page-render flow instead of at `plugins_loaded`, where `wp-admin/includes/template.php` has not yet been loaded.
@@ -84,6 +92,9 @@ Hook `leastudios_email_templates_register_types` at file scope (before `plugins_
 * Transactional emails for leaStudios Payments order, subscription, payment-failure, and refund events
 
 == Upgrade Notice ==
+
+= 1.2.0 =
+Adds a "Send Branded Sample" button on the Branding tab so you can verify end-to-end wrapper + transport rendering without a real payment event. Internal Plugin Check hardening — no breaking changes.
 
 = 1.1.1 =
 Fixes a fatal error on the Email Templates → Suppressions admin page introduced in 1.1.0. Recommended upgrade for anyone running 1.1.0.
