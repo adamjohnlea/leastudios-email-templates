@@ -4,7 +4,7 @@ Tags: email templates, branded emails, payment emails, transactional emails, uns
 Requires at least: 6.4
 Tested up to: 7.0
 Requires PHP: 8.2
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,10 @@ Hook `leastudios_email_templates_register_types` at file scope (before `plugins_
 
 == Changelog ==
 
+= 1.2.1 — 2026-05-29 =
+
+* Changed: payment order/subscription data is now resolved through leaStudios Payments' public read filters instead of its repository classes, so this plugin lints, tests, and packages without the payments repository present. No change to the emails customers receive.
+
 = 1.2.0 — 2026-05-24 =
 
 * Added: "Send Branded Sample" button on the Branding tab — sends a generic sample email through the full `wp_mail()` pipeline so you can verify wrapper + transport + inbox rendering end-to-end without needing a real payment event.
@@ -92,6 +96,9 @@ Hook `leastudios_email_templates_register_types` at file scope (before `plugins_
 * Transactional emails for leaStudios Payments order, subscription, payment-failure, and refund events
 
 == Upgrade Notice ==
+
+= 1.2.1 =
+Internal refactor — payment data now flows through public filters exposed by leaStudios Payments. No user-facing changes; safe upgrade.
 
 = 1.2.0 =
 Adds a "Send Branded Sample" button on the Branding tab so you can verify end-to-end wrapper + transport rendering without a real payment event. Internal Plugin Check hardening — no breaking changes.

@@ -3,7 +3,7 @@
  * Plugin Name:       leaStudios Email Templates
  * Plugin URI:        https://leastudios.com/plugins/email-templates
  * Description:       Branded email templates for all WordPress emails plus payment transactional emails.
- * Version:           1.2.0
+ * Version:           1.2.1
  * Requires at least: 6.4
  * Requires PHP:      8.2
  * Author:            leaStudios
