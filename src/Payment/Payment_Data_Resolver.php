@@ -13,35 +13,43 @@ namespace LEAStudios\EmailTemplates\Payment;
 defined( 'ABSPATH' ) || exit;
 
 use LEAStudios\EmailTemplates\Email\Merge_Tag_Replacer;
-use LEAStudios\Payments\Database\Order_Repository;
-use LEAStudios\Payments\Database\Subscription_Repository;
 
 /**
  * Builds merge tag context arrays from payment data.
+ *
+ * This class never references leastudios-payments' classes directly. It reads
+ * order/subscription context through the public `leastudios_payments_*` filters
+ * that the payments plugin answers, so this plugin can lint, test, and package
+ * without the payments repository present. When payments is inactive no one
+ * answers the filters, the resolver receives its `null` default, and the
+ * resolve methods return their empty/default shapes.
+ *
+ * The two array shapes below mirror the contract documented on the producer
+ * side (`LEAStudios\Payments\Support\Email_Context_Provider`). They are the
+ * static-typing seam that replaces cross-repo PHPStan scanning; `ContractTest`
+ * asserts the runtime shape matches.
+ *
+ * @phpstan-type OrderEmailContext array{
+ *     customer_name: string,
+ *     customer_email: string,
+ *     amount_total: int,
+ *     currency: string,
+ *     line_items_json: string,
+ *     order_type: string,
+ *     stripe_payment_intent_id: string,
+ *     payment_status: string,
+ *     refunded_amount: int
+ * }
+ * @phpstan-type SubscriptionEmailContext array{
+ *     customer_email: string,
+ *     wp_user_id: int,
+ *     status: string,
+ *     current_period_start: string,
+ *     current_period_end: string,
+ *     product_name: string
+ * }
  */
 class Payment_Data_Resolver {
-
-	/**
-	 * The order repository.
-	 *
-	 * @var Order_Repository
-	 */
-	private Order_Repository $orders;
-
-	/**
-	 * The subscription repository.
-	 *
-	 * @var Subscription_Repository
-	 */
-	private Subscription_Repository $subscriptions;
-
-	/**
-	 * Constructor.
-	 */
-	public function __construct() {
-		$this->orders        = new Order_Repository();
-		$this->subscriptions = new Subscription_Repository();
-	}
 
 	/**
 	 * Resolve context for an order.
@@ -50,27 +58,27 @@ class Payment_Data_Resolver {
 	 * @return array<string, string> Merge tag context.
 	 */
 	public function resolve_order_context( int $order_id ): array {
-		$order = $this->orders->get( $order_id );
+		$order = $this->fetch_order( $order_id );
 
 		if ( null === $order ) {
 			return [];
 		}
 
-		$product_name = $this->extract_product_name( $order->line_items_json ?? '[]' );
-		$order_type   = 'subscription' === ( $order->order_type ?? '' )
+		$product_name = $this->extract_product_name( $order['line_items_json'] );
+		$order_type   = 'subscription' === $order['order_type']
 			? __( 'Subscription', 'leastudios-email-templates' )
 			: __( 'One-time payment', 'leastudios-email-templates' );
 
 		return [
-			'customer_name'  => $order->customer_name ?? '',
-			'customer_email' => $order->customer_email ?? '',
-			'amount'         => Merge_Tag_Replacer::format_amount( (int) ( $order->amount_total ?? 0 ), $order->currency ?? 'usd' ),
-			'currency'       => strtoupper( $order->currency ?? 'USD' ),
+			'customer_name'  => $order['customer_name'],
+			'customer_email' => $order['customer_email'],
+			'amount'         => Merge_Tag_Replacer::format_amount( $order['amount_total'], $order['currency'] ),
+			'currency'       => strtoupper( '' !== $order['currency'] ? $order['currency'] : 'usd' ),
 			'product_name'   => $product_name,
 			'order_type'     => $order_type,
-			'payment_id'     => $order->stripe_payment_intent_id ?? '',
+			'payment_id'     => $order['stripe_payment_intent_id'],
 			'order_id'       => (string) $order_id,
-			'payment_status' => ucfirst( $order->payment_status ?? 'paid' ),
+			'payment_status' => ucfirst( '' !== $order['payment_status'] ? $order['payment_status'] : 'paid' ),
 		];
 	}
 
@@ -81,7 +89,7 @@ class Payment_Data_Resolver {
 	 * @return array<string, string> Merge tag context.
 	 */
 	public function resolve_subscription_context( int $subscription_id ): array {
-		$sub = $this->subscriptions->get( $subscription_id );
+		$sub = $this->fetch_subscription( $subscription_id );
 
 		if ( null === $sub ) {
 			return [];
@@ -89,34 +97,27 @@ class Payment_Data_Resolver {
 
 		// Resolve customer name from WP user if available.
 		$customer_name = '';
-		if ( ! empty( $sub->wp_user_id ) ) {
-			$user = get_userdata( (int) $sub->wp_user_id );
+		if ( 0 !== $sub['wp_user_id'] ) {
+			$user = get_userdata( $sub['wp_user_id'] );
 			if ( $user ) {
 				$customer_name = $user->display_name;
 			}
 		}
 
 		if ( '' === $customer_name ) {
-			$customer_name = $sub->customer_email ?? '';
+			$customer_name = $sub['customer_email'];
 		}
 
-		// Try to get product name from price ID via the order.
-		$product_name = $this->resolve_product_from_subscription( $sub );
-
-		$period_end = '';
-		if ( ! empty( $sub->current_period_end ) ) {
-			$formatted  = wp_date( get_option( 'date_format', 'F j, Y' ), strtotime( $sub->current_period_end ) );
-			$period_end = false !== $formatted ? $formatted : '';
-		}
+		$period_end = $this->format_date( $sub['current_period_end'] );
 
 		return [
 			'customer_name'       => $customer_name,
-			'customer_email'      => $sub->customer_email ?? '',
+			'customer_email'      => $sub['customer_email'],
 			'subscription_id'     => (string) $subscription_id,
-			'subscription_status' => ucfirst( $sub->status ?? '' ),
+			'subscription_status' => ucfirst( $sub['status'] ),
 			'period_end'          => $period_end,
-			'period_start'        => $this->format_date( $sub->current_period_start ?? '' ),
-			'product_name'        => $product_name,
+			'period_start'        => $this->format_date( $sub['current_period_start'] ),
+			'product_name'        => $sub['product_name'],
 		];
 	}
 
@@ -139,20 +140,27 @@ class Payment_Data_Resolver {
 	/**
 	 * Look up the local subscription ID for a given Stripe subscription ID.
 	 *
-	 * Wraps Subscription_Repository so the listener doesn't construct it
-	 * inline and so tests can mock the lookup without a real database.
+	 * Delegates to the payments plugin via the
+	 * `leastudios_payments_local_subscription_id` filter so the listener
+	 * doesn't need to know how the lookup happens and so tests can mock it
+	 * without a real database.
 	 *
 	 * @param string $stripe_sub_id The Stripe subscription ID.
 	 * @return int|null Local subscription ID, or null if unknown.
 	 */
 	public function get_local_subscription_id( string $stripe_sub_id ): ?int {
-		$local = $this->subscriptions->get_by_stripe_id( $stripe_sub_id );
+		/**
+		 * Filters the local subscription ID for a Stripe subscription ID.
+		 *
+		 * Answered by leastudios-payments. Returns the unchanged default
+		 * (`null`) when payments is inactive or the ID is unknown.
+		 *
+		 * @param int|null $local_id      The local subscription ID, or null.
+		 * @param string   $stripe_sub_id The Stripe subscription ID.
+		 */
+		$local_id = apply_filters( 'leastudios_payments_local_subscription_id', null, $stripe_sub_id );
 
-		if ( null === $local || ! isset( $local->id ) ) {
-			return null;
-		}
-
-		return (int) $local->id;
+		return is_int( $local_id ) ? $local_id : null;
 	}
 
 	/**
@@ -167,13 +175,13 @@ class Payment_Data_Resolver {
 	 * @return int|null Cumulative refunded amount, or null if order not found.
 	 */
 	public function get_cumulative_refunded( int $order_id ): ?int {
-		$order = $this->orders->get( $order_id );
+		$order = $this->fetch_order( $order_id );
 
 		if ( null === $order ) {
 			return null;
 		}
 
-		return (int) ( $order->refunded_amount ?? 0 );
+		return $order['refunded_amount'];
 	}
 
 	/**
@@ -184,17 +192,105 @@ class Payment_Data_Resolver {
 	 * @return array<string, string> Merge tag context.
 	 */
 	public function resolve_refund_context( int $order_id, int $refunded_amount ): array {
-		$order_context = $this->resolve_order_context( $order_id );
+		$order = $this->fetch_order( $order_id );
 
-		$currency = 'usd';
-		$order    = $this->orders->get( $order_id );
-		if ( null !== $order ) {
-			$currency = $order->currency ?? 'usd';
+		if ( null === $order ) {
+			return [];
 		}
 
+		$order_context = $this->resolve_order_context( $order_id );
+
+		$currency                         = '' !== $order['currency'] ? $order['currency'] : 'usd';
 		$order_context['refunded_amount'] = Merge_Tag_Replacer::format_amount( $refunded_amount, $currency );
 
 		return $order_context;
+	}
+
+	/**
+	 * Fetch an order's plain context array from the payments plugin.
+	 *
+	 * @param int $order_id The local order ID.
+	 * @return array|null The order context, or null when unavailable.
+	 *
+	 * @phpstan-return OrderEmailContext|null
+	 */
+	private function fetch_order( int $order_id ): ?array {
+		/**
+		 * Filters the order email context array.
+		 *
+		 * Answered by leastudios-payments. Returns the unchanged default
+		 * (`null`) when payments is inactive or the order is not found.
+		 *
+		 * @param array<string, mixed>|null $context  The order context, or null.
+		 * @param int                       $order_id The local order ID.
+		 */
+		$context = apply_filters( 'leastudios_payments_order_email_context', null, $order_id );
+
+		return is_array( $context ) ? $this->normalize_order( $context ) : null;
+	}
+
+	/**
+	 * Fetch a subscription's plain context array from the payments plugin.
+	 *
+	 * @param int $subscription_id The local subscription ID.
+	 * @return array|null The subscription context, or null when unavailable.
+	 *
+	 * @phpstan-return SubscriptionEmailContext|null
+	 */
+	private function fetch_subscription( int $subscription_id ): ?array {
+		/**
+		 * Filters the subscription email context array.
+		 *
+		 * Answered by leastudios-payments. Returns the unchanged default
+		 * (`null`) when payments is inactive or the subscription is missing.
+		 *
+		 * @param array<string, mixed>|null $context         The subscription context, or null.
+		 * @param int                       $subscription_id The local subscription ID.
+		 */
+		$context = apply_filters( 'leastudios_payments_subscription_email_context', null, $subscription_id );
+
+		return is_array( $context ) ? $this->normalize_subscription( $context ) : null;
+	}
+
+	/**
+	 * Coerce a raw order context array into the strict OrderEmailContext shape.
+	 *
+	 * @param array<string, mixed> $context Raw context from the filter.
+	 * @return array The normalized order context.
+	 *
+	 * @phpstan-return OrderEmailContext
+	 */
+	private function normalize_order( array $context ): array {
+		return [
+			'customer_name'            => (string) ( $context['customer_name'] ?? '' ),
+			'customer_email'           => (string) ( $context['customer_email'] ?? '' ),
+			'amount_total'             => (int) ( $context['amount_total'] ?? 0 ),
+			'currency'                 => (string) ( $context['currency'] ?? '' ),
+			'line_items_json'          => (string) ( $context['line_items_json'] ?? '[]' ),
+			'order_type'               => (string) ( $context['order_type'] ?? '' ),
+			'stripe_payment_intent_id' => (string) ( $context['stripe_payment_intent_id'] ?? '' ),
+			'payment_status'           => (string) ( $context['payment_status'] ?? '' ),
+			'refunded_amount'          => (int) ( $context['refunded_amount'] ?? 0 ),
+		];
+	}
+
+	/**
+	 * Coerce a raw subscription context array into the strict shape.
+	 *
+	 * @param array<string, mixed> $context Raw context from the filter.
+	 * @return array The normalized subscription context.
+	 *
+	 * @phpstan-return SubscriptionEmailContext
+	 */
+	private function normalize_subscription( array $context ): array {
+		return [
+			'customer_email'       => (string) ( $context['customer_email'] ?? '' ),
+			'wp_user_id'           => (int) ( $context['wp_user_id'] ?? 0 ),
+			'status'               => (string) ( $context['status'] ?? '' ),
+			'current_period_start' => (string) ( $context['current_period_start'] ?? '' ),
+			'current_period_end'   => (string) ( $context['current_period_end'] ?? '' ),
+			'product_name'         => (string) ( $context['product_name'] ?? '' ),
+		];
 	}
 
 	/**
@@ -237,53 +333,13 @@ class Payment_Data_Resolver {
 	}
 
 	/**
-	 * Try to resolve product name from subscription data.
-	 *
-	 * Filters this customer's subscription orders by the subscription's
-	 * current `stripe_price_id` so a customer with multiple subscriptions
-	 * gets the right product name rather than whichever order was most
-	 * recent.
-	 *
-	 * @param object $sub The subscription record.
-	 * @return string
-	 */
-	private function resolve_product_from_subscription( object $sub ): string {
-		if ( empty( $sub->stripe_customer_id ) || empty( $sub->stripe_price_id ) ) {
-			return '';
-		}
-
-		global $wpdb;
-		$table = $wpdb->prefix . 'leastudios_payments_orders';
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-		$orders = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT line_items_json FROM %i WHERE stripe_customer_id = %s AND order_type = 'subscription' ORDER BY id DESC",
-				$table,
-				$sub->stripe_customer_id
-			)
-		);
-
-		if ( empty( $orders ) ) {
-			return '';
-		}
-
-		$json_strings = array_map(
-			static fn( object $row ): string => (string) ( $row->line_items_json ?? '[]' ),
-			$orders
-		);
-
-		return self::find_product_name_for_price( $json_strings, (string) $sub->stripe_price_id );
-	}
-
-	/**
 	 * Scan a list of `line_items_json` strings (most-recent-first) and return
 	 * the description of the first line item whose `price_id` matches.
 	 *
-	 * Pure helper — no database access — so it can be unit-tested without the
-	 * payments plugin loaded. Used by `resolve_product_from_subscription`
-	 * to pick the right product when a customer has multiple subscription
-	 * orders.
+	 * Pure helper — no database access — retained so existing tests and any
+	 * external callers keep working. Product-name resolution for subscriptions
+	 * now happens on the payments side and arrives via the subscription
+	 * context's `product_name` key.
 	 *
 	 * @param array<int, string> $line_items_json_rows Raw `line_items_json` strings.
 	 * @param string             $stripe_price_id      The Stripe price ID to match.

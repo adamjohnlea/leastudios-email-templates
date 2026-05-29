@@ -15,14 +15,6 @@ jobs:
         with:
           path: leastudios-email-templates
 
-      # phpstan.neon scans ../leastudios-payments/src for cross-plugin type checking,
-      # so the payments repo must be present on disk for `composer phpstan` to succeed.
-      - name: Check out leastudios-payments
-        uses: actions/checkout@v5
-        with:
-          repository: adamjohnlea/leastudios-payments
-          path: leastudios-payments
-
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:

@@ -4,12 +4,6 @@ parameters:
         - src
     scanDirectories:
         - vendor/php-stubs/wordpress-stubs
-        # leastudios-email-templates listens to actions fired by leastudios-payments
-        # (order_created, refund_processed, subscription_synced, etc.) and uses its
-        # repositories to resolve context. Scan the sibling plugin's src so PHPStan
-        # can see those types — keeps it as a real cross-plugin contract instead of
-        # hiding the dependency behind ignoreErrors.
-        - ../leastudios-payments/src
     bootstrapFiles:
         - phpstan-bootstrap.php
         - vendor/php-stubs/wp-cli-stubs/wp-cli-stubs.php
